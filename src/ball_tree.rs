@@ -32,6 +32,7 @@ impl BallTree {
 struct Node {
     range: Range<usize>,
     centroid: Vec<f64>,
+    radius_squared: f64,
     is_leaf: bool,
 }
 
@@ -47,7 +48,21 @@ impl Node {
         for c in centroid.iter_mut() {
             *c /= idx.len() as f64;
         }
+
+        let radius_squared = idx.iter().fold(0., |max, &i| {
+            let dist_squared = centroid.iter().zip(points.row(i)).fold(0., |sum, (c, p)| {
+                let diff = c - p;
+                sum + diff * diff
+            });
+            if dist_squared > max {
+                dist_squared
+            } else {
+                max
+            }
+        });
+
         self.centroid = centroid;
+        self.radius_squared = radius_squared;
     }
 }
 
@@ -56,6 +71,7 @@ impl Default for Node {
         Node {
             range: (0..0),
             centroid: Vec::new(),
+            radius_squared: 0.,
             is_leaf: false,
         }
     }
@@ -194,6 +210,7 @@ mod test {
         let mut node = Node::default();
         node.init(&aview2(&data), &idx);
         assert_eq!(node.centroid, [0., 4.]);
+        assert_eq!(node.radius_squared, 25.);
 
         let idx: [usize; 2] = [0, 2];
         node.init(&aview2(&data), &idx);
