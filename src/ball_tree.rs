@@ -31,13 +31,31 @@ impl BallTree {
 #[derive(Clone, Debug)]
 struct Node {
     range: Range<usize>,
+    centroid: Vec<f64>,
     is_leaf: bool,
+}
+
+impl Node {
+    /// Computes the centroid of the node.
+    fn init(&mut self, points: &ArrayView2<f64>, idx: &[usize]) {
+        let mut centroid = vec![0.; points.shape()[1]];
+        for &i in idx {
+            for (c, col) in centroid.iter_mut().zip(points.gencolumns()) {
+                *c += col[i];
+            }
+        }
+        for c in centroid.iter_mut() {
+            *c /= idx.len() as f64;
+        }
+        self.centroid = centroid;
+    }
 }
 
 impl Default for Node {
     fn default() -> Self {
         Node {
             range: (0..0),
+            centroid: Vec::new(),
             is_leaf: false,
         }
     }
@@ -55,6 +73,8 @@ fn build_subtree(
     root: usize,
     range: Range<usize>,
 ) {
+    nodes[root].init(points, &idx[range.clone()]);
+
     let n_nodes = nodes.len();
     if let Some(node) = nodes.get_mut(root) {
         node.range = range.clone();
@@ -165,6 +185,19 @@ mod test {
     fn ball_tree() {
         let data = [[1., 1.], [1., 1.1], [9., 9.]];
         let _tree = BallTree::new(&aview2(&data));
+    }
+
+    #[test]
+    fn node_init() {
+        let data = [[0., 1.], [0., 9.], [0., 2.]];
+        let idx: [usize; 3] = [0, 1, 2];
+        let mut node = Node::default();
+        node.init(&aview2(&data), &idx);
+        assert_eq!(node.centroid, [0., 4.]);
+
+        let idx: [usize; 2] = [0, 2];
+        node.init(&aview2(&data), &idx);
+        assert_eq!(node.centroid, [0., 1.5]);
     }
 
     #[test]
