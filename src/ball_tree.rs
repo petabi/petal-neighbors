@@ -4,26 +4,102 @@ use std::mem::size_of;
 use std::ops::Range;
 
 /// A data structure for neighbor search in a multi-dimensional space.
-#[derive(Debug, Default)]
-pub struct BallTree {
+#[derive(Debug)]
+pub struct BallTree<'a> {
+    points: &'a ArrayView2<'a, f64>,
     idx: Vec<usize>,
     nodes: Vec<Node>,
 }
 
-impl BallTree {
+impl<'a> BallTree<'a> {
     /// Builds a ball tree containing the given points.
-    pub fn new(points: &ArrayView2<f64>) -> Self {
+    ///
+    /// # Panics
+    ///
+    /// Panics if `points` is empty.
+    pub fn new(points: &'a ArrayView2<'a, f64>) -> Self {
         let n_points: usize = *points.shape().first().unwrap();
-        if n_points == 0 {
-            return BallTree::default();
-        }
         let height = (size_of::<usize>() * 8) as u32 - n_points.leading_zeros();
         let size = 1usize.wrapping_shl(height) - 1;
 
         let mut idx: Vec<usize> = (0..n_points).collect();
         let mut nodes = vec![Node::default(); size];
         build_subtree(&mut nodes, &mut idx, points, 0, 0..n_points);
-        BallTree { idx, nodes }
+        BallTree { points, idx, nodes }
+    }
+
+    /// Finds the nearest neighbor in the tree.
+    pub fn nearest_neighbor(&self, point: &[f64]) -> usize {
+        let (i, _) = self
+            .nearest_neighbor_in_subtree(point, 0, std::f64::INFINITY)
+            .unwrap();
+        i
+    }
+
+    /// Finds the nearest neighbor within the radius in the subtree rooted at `root`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `root` is out of bound.
+    fn nearest_neighbor_in_subtree(
+        &self,
+        point: &[f64],
+        root: usize,
+        radius_squared: f64,
+    ) -> Option<(usize, f64)> {
+        let root_node = &self.nodes[root];
+        let lower_bound = self.nodes[root].distance_lower_bound(point);
+        if lower_bound * lower_bound > radius_squared {
+            return None;
+        }
+
+        if root_node.is_leaf {
+            let (min_i, min_dist) = self.idx[root_node.range.clone()].iter().fold(
+                (0, std::f64::INFINITY),
+                |(min_i, min_dist), &i| {
+                    let dist_squared =
+                        point
+                            .iter()
+                            .zip(self.points.row(i))
+                            .fold(0., |sum, (a, b)| {
+                                let diff = a - b;
+                                sum + diff * diff
+                            });
+                    if dist_squared < min_dist {
+                        (i, dist_squared)
+                    } else {
+                        (min_i, min_dist)
+                    }
+                },
+            );
+            if min_dist <= radius_squared {
+                Some((min_i, min_dist.sqrt()))
+            } else {
+                None
+            }
+        } else {
+            let child1 = root * 2 + 1;
+            let child2 = child1 + 1;
+            let lb1 = self.nodes[child1].distance_lower_bound(point);
+            let lb2 = self.nodes[child2].distance_lower_bound(point);
+            let (child1, child2) = if lb1 < lb2 {
+                (child1, child2)
+            } else {
+                (child2, child1)
+            };
+            match self.nearest_neighbor_in_subtree(point, child1, radius_squared) {
+                Some((i1, dist_squared1)) => {
+                    if let Some((i2, dist_squared2)) =
+                        self.nearest_neighbor_in_subtree(point, child2, dist_squared1)
+                    {
+                        Some((i2, dist_squared2))
+                    } else {
+                        Some((i1, dist_squared1))
+                    }
+                }
+                None => self.nearest_neighbor_in_subtree(point, child2, radius_squared),
+            }
+        }
     }
 }
 
@@ -63,6 +139,19 @@ impl Node {
 
         self.centroid = centroid;
         self.radius_squared = radius_squared;
+    }
+
+    fn distance_lower_bound(&self, point: &[f64]) -> f64 {
+        let centroid_dist = self
+            .centroid
+            .iter()
+            .zip(point.iter())
+            .fold(0., |sum, (c, p)| {
+                let diff = c - p;
+                sum + diff * diff
+            })
+            .sqrt();
+        centroid_dist - self.radius_squared.sqrt()
     }
 }
 
@@ -192,6 +281,7 @@ mod test {
     use ndarray::{aview1, aview2};
 
     #[test]
+    #[should_panic]
     fn ball_tree_empty() {
         let data: [[f64; 0]; 0] = [];
         let _tree = BallTree::new(&aview2(&data));
@@ -200,7 +290,17 @@ mod test {
     #[test]
     fn ball_tree() {
         let data = [[1., 1.], [1., 1.1], [9., 9.]];
-        let _tree = BallTree::new(&aview2(&data));
+        let view = aview2(&data);
+        let tree = BallTree::new(&view);
+
+        let point = [0., 0.];
+        assert_eq!(tree.nearest_neighbor(&point), 0);
+
+        let point = [1.1, 1.2];
+        assert_eq!(tree.nearest_neighbor(&point), 1);
+
+        let point = [7., 7.];
+        assert_eq!(tree.nearest_neighbor(&point), 2);
     }
 
     #[test]
