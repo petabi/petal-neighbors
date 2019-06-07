@@ -54,17 +54,12 @@ impl<'a> BallTree<'a> {
         }
 
         if root_node.is_leaf {
+            let point = ArrayView1::from(point);
             let (min_i, min_dist) = self.idx[root_node.range.clone()].iter().fold(
                 (0, std::f64::INFINITY),
                 |(min_i, min_dist), &i| {
-                    let dist_squared =
-                        point
-                            .iter()
-                            .zip(self.points.row(i))
-                            .fold(0., |sum, (a, b)| {
-                                let diff = a - b;
-                                sum + diff * diff
-                            });
+                    let dist_squared = squared_euclidean_distance(&point, &self.points.row(i));
+
                     if dist_squared < min_dist {
                         (i, dist_squared)
                     } else {
@@ -124,14 +119,10 @@ impl Node {
             / idx.len() as f64;
 
         let radius_squared = idx.iter().fold(0., |max, &i| {
-            let dist_squared = (&centroid.view() - &points.row(i))
-                .mapv(|a| a.powi(2))
-                .sum();
-            if dist_squared > max {
-                dist_squared
-            } else {
-                max
-            }
+            f64::max(
+                squared_euclidean_distance(&centroid.view(), &points.row(i)),
+                max,
+            )
         });
 
         self.centroid = centroid.into_raw_vec();
@@ -142,7 +133,7 @@ impl Node {
         let point = ArrayView1::from(point);
         let centroid = ArrayView1::from(&self.centroid);
 
-        let centroid_dist = (&point - &centroid).mapv(|a| a.powi(2)).sum().sqrt();
+        let centroid_dist = squared_euclidean_distance(&point, &centroid).sqrt();
         centroid_dist - self.radius_squared.sqrt()
     }
 }
@@ -231,6 +222,11 @@ fn halve_node_indices(idx: &mut [usize], col: &ArrayView1<f64>) {
             last = cur - 1;
         }
     }
+}
+
+/// Calculates the squared euclidean distance of two points.
+fn squared_euclidean_distance(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
+    (a - b).mapv(|x| x.powi(2)).sum()
 }
 
 /// Finds the column with the maximum spread.
