@@ -1,4 +1,4 @@
-use ndarray::{ArrayView1, ArrayView2};
+use ndarray::{Array1, ArrayView1, ArrayView2};
 use std::cmp;
 use std::mem::size_of;
 use std::ops::Range;
@@ -115,21 +115,18 @@ struct Node {
 impl Node {
     /// Computes the centroid of the node.
     fn init(&mut self, points: &ArrayView2<f64>, idx: &[usize]) {
-        let mut centroid = vec![0.; points.shape()[1]];
-        for &i in idx {
-            for (c, col) in centroid.iter_mut().zip(points.gencolumns()) {
-                *c += col[i];
-            }
-        }
-        for c in centroid.iter_mut() {
-            *c /= idx.len() as f64;
-        }
+        let centroid = idx
+            .iter()
+            .fold(Array1::<f64>::zeros(points.cols()), |mut c, &i| {
+                c += &points.row(i);
+                c
+            })
+            / idx.len() as f64;
 
         let radius_squared = idx.iter().fold(0., |max, &i| {
-            let dist_squared = centroid.iter().zip(points.row(i)).fold(0., |sum, (c, p)| {
-                let diff = c - p;
-                sum + diff * diff
-            });
+            let dist_squared = (&centroid.view() - &points.row(i))
+                .mapv(|a| a.powi(2))
+                .sum();
             if dist_squared > max {
                 dist_squared
             } else {
@@ -137,7 +134,7 @@ impl Node {
             }
         });
 
-        self.centroid = centroid;
+        self.centroid = centroid.into_raw_vec();
         self.radius_squared = radius_squared;
     }
 
