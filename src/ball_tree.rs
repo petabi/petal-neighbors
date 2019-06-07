@@ -139,15 +139,10 @@ impl Node {
     }
 
     fn distance_lower_bound(&self, point: &[f64]) -> f64 {
-        let centroid_dist = self
-            .centroid
-            .iter()
-            .zip(point.iter())
-            .fold(0., |sum, (c, p)| {
-                let diff = c - p;
-                sum + diff * diff
-            })
-            .sqrt();
+        let point = ArrayView1::from(point);
+        let centroid = ArrayView1::from(&self.centroid);
+
+        let centroid_dist = (&point - &centroid).mapv(|a| a.powi(2)).sum().sqrt();
         centroid_dist - self.radius_squared.sqrt()
     }
 }
