@@ -1,4 +1,4 @@
-use ndarray::{ArrayView1, ArrayView2};
+use ndarray::{Array1, ArrayView1, ArrayView2};
 use std::cmp;
 use std::mem::size_of;
 use std::ops::Range;
@@ -29,7 +29,7 @@ impl<'a> BallTree<'a> {
     }
 
     /// Finds the nearest neighbor in the tree.
-    pub fn nearest_neighbor(&self, point: &[f64]) -> usize {
+    pub fn nearest_neighbor(&self, point: &ArrayView1<f64>) -> usize {
         let (i, _) = self
             .nearest_neighbor_in_subtree(point, 0, std::f64::INFINITY)
             .unwrap();
@@ -43,7 +43,7 @@ impl<'a> BallTree<'a> {
     /// Panics if `root` is out of bound.
     fn nearest_neighbor_in_subtree(
         &self,
-        point: &[f64],
+        point: &ArrayView1<f64>,
         root: usize,
         radius_squared: f64,
     ) -> Option<(usize, f64)> {
@@ -54,17 +54,12 @@ impl<'a> BallTree<'a> {
         }
 
         if root_node.is_leaf {
+            let point = ArrayView1::from(point);
             let (min_i, min_dist) = self.idx[root_node.range.clone()].iter().fold(
                 (0, std::f64::INFINITY),
                 |(min_i, min_dist), &i| {
-                    let dist_squared =
-                        point
-                            .iter()
-                            .zip(self.points.row(i))
-                            .fold(0., |sum, (a, b)| {
-                                let diff = a - b;
-                                sum + diff * diff
-                            });
+                    let dist_squared = squared_euclidean_distance(&point, &self.points.row(i));
+
                     if dist_squared < min_dist {
                         (i, dist_squared)
                     } else {
@@ -107,7 +102,7 @@ impl<'a> BallTree<'a> {
 #[derive(Clone, Debug)]
 struct Node {
     range: Range<usize>,
-    centroid: Vec<f64>,
+    centroid: Array1<f64>,
     radius_squared: f64,
     is_leaf: bool,
 }
@@ -115,42 +110,25 @@ struct Node {
 impl Node {
     /// Computes the centroid of the node.
     fn init(&mut self, points: &ArrayView2<f64>, idx: &[usize]) {
-        let mut centroid = vec![0.; points.shape()[1]];
-        for &i in idx {
-            for (c, col) in centroid.iter_mut().zip(points.gencolumns()) {
-                *c += col[i];
-            }
-        }
-        for c in centroid.iter_mut() {
-            *c /= idx.len() as f64;
-        }
+        self.centroid = idx
+            .iter()
+            .fold(Array1::<f64>::zeros(points.cols()), |mut c, &i| {
+                c += &points.row(i);
+                c
+            })
+            / idx.len() as f64;
 
-        let radius_squared = idx.iter().fold(0., |max, &i| {
-            let dist_squared = centroid.iter().zip(points.row(i)).fold(0., |sum, (c, p)| {
-                let diff = c - p;
-                sum + diff * diff
-            });
-            if dist_squared > max {
-                dist_squared
-            } else {
-                max
-            }
+        self.radius_squared = idx.iter().fold(0., |max, &i| {
+            f64::max(
+                squared_euclidean_distance(&self.centroid.view(), &points.row(i)),
+                max,
+            )
         });
-
-        self.centroid = centroid;
-        self.radius_squared = radius_squared;
     }
 
-    fn distance_lower_bound(&self, point: &[f64]) -> f64 {
-        let centroid_dist = self
-            .centroid
-            .iter()
-            .zip(point.iter())
-            .fold(0., |sum, (c, p)| {
-                let diff = c - p;
-                sum + diff * diff
-            })
-            .sqrt();
+    fn distance_lower_bound(&self, point: &ArrayView1<f64>) -> f64 {
+        let centroid_dist = squared_euclidean_distance(&point, &self.centroid.view()).sqrt();
+
         centroid_dist - self.radius_squared.sqrt()
     }
 }
@@ -159,7 +137,7 @@ impl Default for Node {
     fn default() -> Self {
         Node {
             range: (0..0),
-            centroid: Vec::new(),
+            centroid: Array1::from(vec![]),
             radius_squared: 0.,
             is_leaf: false,
         }
@@ -241,6 +219,11 @@ fn halve_node_indices(idx: &mut [usize], col: &ArrayView1<f64>) {
     }
 }
 
+/// Calculates the squared euclidean distance of two points.
+fn squared_euclidean_distance(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
+    (a - b).mapv(|x| x.powi(2)).sum()
+}
+
 /// Finds the column with the maximum spread.
 ///
 /// # Panics
@@ -293,13 +276,13 @@ mod test {
         let view = aview2(&data);
         let tree = BallTree::new(&view);
 
-        let point = [0., 0.];
+        let point = aview1(&[0., 0.]);
         assert_eq!(tree.nearest_neighbor(&point), 0);
 
-        let point = [1.1, 1.2];
+        let point = aview1(&[1.1, 1.2]);
         assert_eq!(tree.nearest_neighbor(&point), 1);
 
-        let point = [7., 7.];
+        let point = aview1(&[7., 7.]);
         assert_eq!(tree.nearest_neighbor(&point), 2);
     }
 
@@ -309,12 +292,12 @@ mod test {
         let idx: [usize; 3] = [0, 1, 2];
         let mut node = Node::default();
         node.init(&aview2(&data), &idx);
-        assert_eq!(node.centroid, [0., 4.]);
+        assert_eq!(node.centroid, aview1(&[0., 4.]));
         assert_eq!(node.radius_squared, 25.);
 
         let idx: [usize; 2] = [0, 2];
         node.init(&aview2(&data), &idx);
-        assert_eq!(node.centroid, [0., 1.5]);
+        assert_eq!(node.centroid, aview1(&[0., 1.5]));
     }
 
     #[test]
