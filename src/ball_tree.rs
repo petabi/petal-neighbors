@@ -1,5 +1,6 @@
 use ndarray::{Array1, ArrayView1, ArrayView2};
 use std::cmp;
+use std::collections::BinaryHeap;
 use std::mem::size_of;
 use std::ops::Range;
 
@@ -29,11 +30,29 @@ impl<'a> BallTree<'a> {
     }
 
     /// Finds the nearest neighbor in the tree.
-    pub fn nearest_neighbor(&self, point: &ArrayView1<f64>) -> usize {
+    pub fn query_one(&self, point: &ArrayView1<f64>) -> usize {
         let (i, _) = self
             .nearest_neighbor_in_subtree(point, 0, std::f64::INFINITY)
             .unwrap();
         i
+    }
+
+    pub fn query(&self, point: &ArrayView1<f64>, k: usize) -> Vec<usize> {
+        let mut neighbors = BinaryHeap::with_capacity(k);
+        self.nearest_k_neighbors_in_subtree(point, 0, std::f64::INFINITY, k, &mut neighbors);
+        neighbors.into_iter().map(|n| n.idx).collect()
+    }
+
+    pub fn query_radius(&self, point: &ArrayView1<f64>, distance: f64) -> Vec<usize> {
+        let mut neighbors = BinaryHeap::with_capacity(self.points.len());
+        self.nearest_k_neighbors_in_subtree(
+            point,
+            0,
+            distance.powi(2),
+            self.points.len(),
+            &mut neighbors,
+        );
+        neighbors.into_iter().map(|n| n.idx).collect()
     }
 
     /// Finds the nearest neighbor within the radius in the subtree rooted at `root`.
@@ -96,7 +115,94 @@ impl<'a> BallTree<'a> {
             }
         }
     }
+
+    /// Finds the nearest k neighbors within the radius in the subtree rooted at `root`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `root` is out of bound.
+    fn nearest_k_neighbors_in_subtree(
+        &self,
+        point: &ArrayView1<f64>,
+        root: usize,
+        radius_squared: f64,
+        k: usize,
+        neighbors: &mut BinaryHeap<Neighbor>,
+    ) {
+        let root_node = &self.nodes[root];
+        if root_node.distance_lower_bound(point).powi(2) > radius_squared {
+            return;
+        }
+
+        if root_node.is_leaf {
+            let point = ArrayView1::from(point);
+            self.idx[root_node.range.clone()]
+                .iter()
+                .filter_map(|&i| {
+                    let dist_squared = squared_euclidean_distance(&point, &self.points.row(i));
+
+                    if dist_squared < radius_squared {
+                        Some(Neighbor::new(i, dist_squared.sqrt()))
+                    } else {
+                        None
+                    }
+                })
+                .fold(neighbors, |neighbors, n| {
+                    if neighbors.len() < k {
+                        neighbors.push(n);
+                    } else if n < *neighbors.peek().unwrap() {
+                        neighbors.pop();
+                        neighbors.push(n);
+                    }
+                    neighbors
+                });
+            return;
+        } else {
+            let child1 = root * 2 + 1;
+            let child2 = child1 + 1;
+            let lb1 = self.nodes[child1].distance_lower_bound(point);
+            let lb2 = self.nodes[child2].distance_lower_bound(point);
+            let (child1, child2) = if lb1 < lb2 {
+                (child1, child2)
+            } else {
+                (child2, child1)
+            };
+            self.nearest_k_neighbors_in_subtree(point, child1, radius_squared, k, neighbors);
+            self.nearest_k_neighbors_in_subtree(point, child2, radius_squared, k, neighbors);
+        }
+    }
 }
+
+struct Neighbor {
+    pub idx: usize,
+    pub distance: f64,
+}
+
+impl Neighbor {
+    pub fn new(idx: usize, distance: f64) -> Self {
+        Neighbor { idx, distance }
+    }
+}
+
+impl Ord for Neighbor {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+impl PartialOrd for Neighbor {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        self.distance.partial_cmp(&other.distance)
+    }
+}
+
+impl PartialEq for Neighbor {
+    fn eq(&self, other: &Self) -> bool {
+        self.distance == other.distance
+    }
+}
+
+impl Eq for Neighbor {}
 
 /// A node containing a range of points in a ball tree.
 #[derive(Clone, Debug)]
@@ -281,13 +387,19 @@ mod test {
         let tree = BallTree::new(&view);
 
         let point = aview1(&[0., 0.]);
-        assert_eq!(tree.nearest_neighbor(&point), 0);
+        assert_eq!(tree.query_one(&point), 0);
+        assert_eq!(tree.query(&point, 1), vec![0]);
+        let mut res = tree.query_radius(&point, 2.);
+        res.sort_unstable();
+        assert_eq!(res, vec![0, 1]);
 
         let point = aview1(&[1.1, 1.2]);
-        assert_eq!(tree.nearest_neighbor(&point), 1);
+        assert_eq!(tree.query_one(&point), 1);
+        assert_eq!(tree.query(&point, 1), vec![1]);
 
         let point = aview1(&[7., 7.]);
-        assert_eq!(tree.nearest_neighbor(&point), 2);
+        assert_eq!(tree.query_one(&point), 2);
+        assert_eq!(tree.query(&point, 1), vec![2]);
     }
 
     #[test]
