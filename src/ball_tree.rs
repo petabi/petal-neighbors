@@ -128,8 +128,12 @@ impl Node {
 
     fn distance_lower_bound(&self, point: &ArrayView1<f64>) -> f64 {
         let centroid_dist = squared_euclidean_distance(&point, &self.centroid.view()).sqrt();
-
-        centroid_dist - self.radius_squared.sqrt()
+        let lb = centroid_dist - self.radius_squared.sqrt();
+        if lb < 0. {
+            0.
+        } else {
+            lb
+        }
     }
 }
 
