@@ -483,4 +483,19 @@ mod test {
         let idx: [usize; 3] = [0, 1, 2];
         assert_eq!(super::max_spread_column(&aview2(&data), &idx), 1);
     }
+
+    #[test]
+    #[should_panic]
+    fn max_spread() {
+        let data = vec![
+            [1.0, 2.0],
+            [1.1, 2.2],
+            [0.9, 1.9],
+            [1.0, 2.1],
+            [-2.0, 3.0],
+            [-2.2, 3.1],
+        ];
+        let view = aview2(&data);
+        let tree = BallTree::new(&view);
+    }
 }
