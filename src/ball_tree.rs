@@ -281,24 +281,14 @@ fn build_subtree(
     }
 
     #[allow(clippy::deref_addrof)]
-    let col_idx = max_spread_column(points, &idx[range.clone()]) + range.start;
+    let col_idx = max_spread_column(points, &idx[range.clone()]);
     debug_assert!(col_idx < points.cols());
     let col = points.column(col_idx);
     halve_node_indices(idx, &col);
-    build_subtree(
-        nodes,
-        idx,
-        points,
-        root * 2 + 1,
-        range.start..(range.start + points.len() / 2),
-    );
-    build_subtree(
-        nodes,
-        idx,
-        points,
-        root * 2 + 2,
-        (range.start + points.len() / 2)..range.end,
-    );
+
+    let mid = range.start + points.rows() / 2;
+    build_subtree(nodes, idx, points, root * 2 + 1, range.start..mid);
+    build_subtree(nodes, idx, points, root * 2 + 2, mid..range.end);
 }
 
 /// Divides the node index array into two equal-sized parts.
@@ -403,6 +393,23 @@ mod test {
     }
 
     #[test]
+    fn ball_tree2() {
+        let data = vec![
+            [1.0, 2.0],
+            [1.1, 2.2],
+            [0.9, 1.9],
+            [1.0, 2.1],
+            [-2.0, 3.0],
+            [-2.2, 3.1],
+        ];
+        let view = aview2(&data);
+        let tree = BallTree::new(&view);
+
+        let point = aview1(&[1., 2.]);
+        assert_eq!(tree.query_one(&point), 0);
+    }
+
+    #[test]
     fn node_init() {
         let data = [[0., 1.], [0., 9.], [0., 2.]];
         let idx: [usize; 3] = [0, 1, 2];
@@ -482,20 +489,5 @@ mod test {
         let data = [[0., 1.], [0., 9.], [0., 2.]];
         let idx: [usize; 3] = [0, 1, 2];
         assert_eq!(super::max_spread_column(&aview2(&data), &idx), 1);
-    }
-
-    #[test]
-    #[should_panic]
-    fn max_spread() {
-        let data = vec![
-            [1.0, 2.0],
-            [1.1, 2.2],
-            [0.9, 1.9],
-            [1.0, 2.1],
-            [-2.0, 3.0],
-            [-2.2, 3.1],
-        ];
-        let view = aview2(&data);
-        let tree = BallTree::new(&view);
     }
 }
