@@ -29,21 +29,23 @@ impl<'a> BallTree<'a> {
         BallTree { points, idx, nodes }
     }
 
-    /// Finds the nearest neighbor in the tree.
-    pub fn query_one(&self, point: &ArrayView1<f64>) -> usize {
-        let (i, _) = self
-            .nearest_neighbor_in_subtree(point, 0, std::f64::INFINITY)
-            .unwrap();
-        i
+    /// Finds the nearest neighbor and its distance in the tree.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the tree is empty.
+    pub fn query_one(&self, point: &ArrayView1<f64>) -> Neighbor {
+        self.nearest_neighbor_in_subtree(point, 0, std::f64::INFINITY)
+            .unwrap()
     }
 
-    pub fn query(&self, point: &ArrayView1<f64>, k: usize) -> Vec<usize> {
+    pub fn query(&self, point: &ArrayView1<f64>, k: usize) -> Vec<Neighbor> {
         let mut neighbors = BinaryHeap::with_capacity(k);
         self.nearest_k_neighbors_in_subtree(point, 0, std::f64::INFINITY, k, &mut neighbors);
-        neighbors.into_iter().map(|n| n.idx).collect()
+        neighbors.into_sorted_vec()
     }
 
-    pub fn query_radius(&self, point: &ArrayView1<f64>, distance: f64) -> Vec<usize> {
+    pub fn query_radius(&self, point: &ArrayView1<f64>, distance: f64) -> Vec<Neighbor> {
         let mut neighbors = BinaryHeap::with_capacity(self.points.len());
         self.nearest_k_neighbors_in_subtree(
             point,
@@ -52,7 +54,7 @@ impl<'a> BallTree<'a> {
             self.points.len(),
             &mut neighbors,
         );
-        neighbors.into_iter().map(|n| n.idx).collect()
+        neighbors.into_sorted_vec()
     }
 
     /// Finds the nearest neighbor within the radius in the subtree rooted at `root`.
@@ -65,7 +67,7 @@ impl<'a> BallTree<'a> {
         point: &ArrayView1<f64>,
         root: usize,
         radius_squared: f64,
-    ) -> Option<(usize, f64)> {
+    ) -> Option<Neighbor> {
         let root_node = &self.nodes[root];
         let lower_bound = self.nodes[root].distance_lower_bound(point);
         if lower_bound * lower_bound > radius_squared {
@@ -87,7 +89,10 @@ impl<'a> BallTree<'a> {
                 },
             );
             if min_dist <= radius_squared {
-                Some((min_i, min_dist.sqrt()))
+                Some(Neighbor {
+                    idx: min_i,
+                    distance: min_dist.sqrt(),
+                })
             } else {
                 None
             }
@@ -102,13 +107,13 @@ impl<'a> BallTree<'a> {
                 (child2, child1)
             };
             match self.nearest_neighbor_in_subtree(point, child1, radius_squared) {
-                Some((i1, dist_squared1)) => {
-                    if let Some((i2, dist_squared2)) =
-                        self.nearest_neighbor_in_subtree(point, child2, dist_squared1)
+                Some(neighbor1) => {
+                    if let Some(neighbor2) =
+                        self.nearest_neighbor_in_subtree(point, child2, neighbor1.distance)
                     {
-                        Some((i2, dist_squared2))
+                        Some(neighbor2)
                     } else {
-                        Some((i1, dist_squared1))
+                        Some(neighbor1)
                     }
                 }
                 None => self.nearest_neighbor_in_subtree(point, child2, radius_squared),
@@ -173,7 +178,8 @@ impl<'a> BallTree<'a> {
     }
 }
 
-struct Neighbor {
+#[derive(Debug)]
+pub struct Neighbor {
     pub idx: usize,
     pub distance: f64,
 }
@@ -181,6 +187,12 @@ struct Neighbor {
 impl Neighbor {
     pub fn new(idx: usize, distance: f64) -> Self {
         Neighbor { idx, distance }
+    }
+
+    pub fn approx_eq(&self, other: &Neighbor) -> bool {
+        self.idx == other.idx
+            && self.distance - std::f64::EPSILON < other.distance
+            && other.distance < self.distance + std::f64::EPSILON
     }
 }
 
@@ -377,19 +389,41 @@ mod test {
         let tree = BallTree::new(&view);
 
         let point = aview1(&[0., 0.]);
-        assert_eq!(tree.query_one(&point), 0);
-        assert_eq!(tree.query(&point, 1), vec![0]);
-        let mut res = tree.query_radius(&point, 2.);
-        res.sort_unstable();
-        assert_eq!(res, vec![0, 1]);
+        let neighbor = tree.query_one(&point);
+        assert!(neighbor.approx_eq(&Neighbor {
+            idx: 0,
+            distance: 2f64.sqrt()
+        }));
+        let neighbors = tree.query(&point, 1);
+        assert_eq!(neighbors.len(), 1);
+        assert!(neighbors[0].approx_eq(&neighbor));
+        let neighbors = tree.query_radius(&point, 2.);
+        assert_eq!(neighbors.len(), 2);
+        assert!(neighbors[0].approx_eq(&neighbor));
+        assert!(neighbors[1].approx_eq(&Neighbor {
+            idx: 1,
+            distance: (1f64 + 1.1f64 * 1.1f64).sqrt()
+        }));
 
         let point = aview1(&[1.1, 1.2]);
-        assert_eq!(tree.query_one(&point), 1);
-        assert_eq!(tree.query(&point, 1), vec![1]);
+        let neighbor = tree.query_one(&point);
+        assert!(neighbor.approx_eq(&Neighbor {
+            idx: 1,
+            distance: (2f64 * 0.1f64 * 0.1f64).sqrt()
+        }));
+        let neighbors = tree.query(&point, 1);
+        assert_eq!(neighbors.len(), 1);
+        assert!(neighbors[0].approx_eq(&neighbor));
 
         let point = aview1(&[7., 7.]);
-        assert_eq!(tree.query_one(&point), 2);
-        assert_eq!(tree.query(&point, 1), vec![2]);
+        let neighbor = tree.query_one(&point);
+        assert!(neighbor.approx_eq(&Neighbor {
+            idx: 2,
+            distance: 8f64.sqrt()
+        }));
+        let neighbors = tree.query(&point, 1);
+        assert_eq!(neighbors.len(), 1);
+        assert!(neighbors[0].approx_eq(&neighbor));
     }
 
     #[test]
@@ -406,7 +440,11 @@ mod test {
         let tree = BallTree::new(&view);
 
         let point = aview1(&[1., 2.]);
-        assert_eq!(tree.query_one(&point), 0);
+        let neighbor = tree.query_one(&point);
+        assert!(neighbor.approx_eq(&Neighbor {
+            idx: 0,
+            distance: 0f64,
+        }));
     }
 
     #[test]
