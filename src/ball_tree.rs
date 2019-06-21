@@ -7,7 +7,7 @@ use std::ops::Range;
 /// A data structure for neighbor search in a multi-dimensional space.
 #[derive(Debug)]
 pub struct BallTree<'a> {
-    points: &'a ArrayView2<'a, f64>,
+    points: ArrayView2<'a, f64>,
     idx: Vec<usize>,
     nodes: Vec<Node>,
 }
@@ -18,14 +18,14 @@ impl<'a> BallTree<'a> {
     /// # Panics
     ///
     /// Panics if `points` is empty.
-    pub fn new(points: &'a ArrayView2<'a, f64>) -> Self {
+    pub fn new(points: ArrayView2<'a, f64>) -> Self {
         let n_points: usize = *points.shape().first().unwrap();
         let height = (size_of::<usize>() * 8) as u32 - n_points.leading_zeros();
         let size = 1usize.wrapping_shl(height) - 1;
 
         let mut idx: Vec<usize> = (0..n_points).collect();
         let mut nodes = vec![Node::default(); size];
-        build_subtree(&mut nodes, &mut idx, points, 0, 0..n_points);
+        build_subtree(&mut nodes, &mut idx, &points, 0, 0..n_points);
         BallTree { points, idx, nodes }
     }
 
@@ -379,14 +379,14 @@ mod test {
     #[should_panic]
     fn ball_tree_empty() {
         let data: [[f64; 0]; 0] = [];
-        let _tree = BallTree::new(&aview2(&data));
+        let _tree = BallTree::new(aview2(&data));
     }
 
     #[test]
     fn ball_tree() {
         let data = [[1., 1.], [1., 1.1], [9., 9.]];
         let view = aview2(&data);
-        let tree = BallTree::new(&view);
+        let tree = BallTree::new(view);
 
         let point = aview1(&[0., 0.]);
         let neighbor = tree.query_one(&point);
@@ -437,7 +437,7 @@ mod test {
             [-2.2, 3.1],
         ];
         let view = aview2(&data);
-        let tree = BallTree::new(&view);
+        let tree = BallTree::new(view);
 
         let point = aview1(&[1., 2.]);
         let neighbor = tree.query_one(&point);
