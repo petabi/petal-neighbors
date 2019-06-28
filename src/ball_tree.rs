@@ -298,7 +298,7 @@ fn build_subtree(
     let col = points.column(col_idx);
     halve_node_indices(&mut idx[range.clone()], &col);
 
-    let mid = dbg!((range.start + range.end) / 2);
+    let mid = (range.start + range.end) / 2;
     build_subtree(nodes, idx, points, root * 2 + 1, range.start..mid);
     build_subtree(nodes, idx, points, root * 2 + 2, mid..range.end);
 }
