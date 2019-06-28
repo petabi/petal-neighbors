@@ -296,9 +296,9 @@ fn build_subtree(
     let col_idx = max_spread_column(points, &idx[range.clone()]);
     debug_assert!(col_idx < points.cols());
     let col = points.column(col_idx);
-    halve_node_indices(idx, &col);
+    halve_node_indices(&mut idx[range.clone()], &col);
 
-    let mid = range.start + points.rows() / 2;
+    let mid = dbg!((range.start + range.end) / 2);
     build_subtree(nodes, idx, points, root * 2 + 1, range.start..mid);
     build_subtree(nodes, idx, points, root * 2 + 2, mid..range.end);
 }
@@ -445,6 +445,26 @@ mod test {
             idx: 0,
             distance: 0f64,
         }));
+    }
+
+    #[test]
+    fn ball_tree_identical_points() {
+        let data = vec![
+            [1.0, 1.0],
+            [1.0, 1.0],
+            [1.0, 1.0],
+            [1.0, 1.0],
+            [1.0, 1.0],
+            [1.0, 1.0],
+            [1.0, 1.0],
+            [1.0, 1.0],
+        ];
+        let view = aview2(&data);
+        let tree = BallTree::new(view);
+
+        let point = aview1(&[1., 2.]);
+        let neighbor = tree.query_one(&point);
+        assert_eq!(neighbor.distance, 1f64);
     }
 
     #[test]
