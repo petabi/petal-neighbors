@@ -366,7 +366,11 @@ fn max_spread_column(matrix: &ArrayView2<f64>, idx: &[usize]) -> usize {
     let (max_spread_col, _) = spread_iter.fold(
         (0, max_spread),
         |(max_spread_col, max_spread), (i, spread)| {
-            if spread.partial_cmp(&max_spread).unwrap() == cmp::Ordering::Greater {
+            if spread
+                .partial_cmp(&max_spread)
+                .map(|o| o == cmp::Ordering::Greater)
+                .unwrap_or(false)
+            {
                 (i, spread)
             } else {
                 (max_spread_col, max_spread)
