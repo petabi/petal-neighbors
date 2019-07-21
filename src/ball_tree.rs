@@ -284,10 +284,9 @@ fn build_subtree(
     if let Some(node) = nodes.get_mut(root) {
         node.range = range.clone();
         if root * 2 + 1 >= n_nodes {
-            // A leaf node.
+            node.is_leaf = true;
             return;
         }
-        node.is_leaf = true;
     } else {
         panic!("node index out of range");
     }
