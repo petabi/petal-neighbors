@@ -19,7 +19,14 @@ impl<'a> BallTree<'a> {
     ///
     /// Panics if `points` is empty.
     pub fn new(points: ArrayView2<'a, f64>) -> Self {
-        let n_points: usize = *points.shape().first().unwrap();
+        let n_points: usize = *points
+            .shape()
+            .first()
+            .expect("ArrayView2 should have two dimensions");
+        assert!(
+            n_points > 0,
+            "A ball tree needs at least one point for initialization."
+        );
         let height = (size_of::<usize>() * 8) as u32 - n_points.leading_zeros();
         let size = 1usize.wrapping_shl(height) - 1;
 
@@ -270,7 +277,7 @@ impl Default for Node {
 ///
 /// # Panics
 ///
-/// Panics if `root` is out of range.
+/// Panics if `root` or `range` is out of range.
 fn build_subtree(
     nodes: &mut [Node],
     idx: &mut [usize],
@@ -278,18 +285,17 @@ fn build_subtree(
     root: usize,
     range: Range<usize>,
 ) {
-    nodes[root].init(points, &idx[range.clone()]);
-
     let n_nodes = nodes.len();
-    if let Some(node) = nodes.get_mut(root) {
-        node.range = range.clone();
-        if root * 2 + 1 >= n_nodes {
-            // A leaf node.
-            return;
-        }
-        node.is_leaf = true;
-    } else {
-        panic!("node index out of range");
+    let mut root_node = nodes.get_mut(root).expect("root node index out of range");
+    root_node.init(
+        points,
+        &idx.get(range.clone()).expect("invalid subtree range"),
+    );
+    root_node.range = range.clone();
+    let left = root * 2 + 1;
+    if left >= n_nodes {
+        root_node.is_leaf = true;
+        return;
     }
 
     #[allow(clippy::deref_addrof)]
@@ -299,8 +305,8 @@ fn build_subtree(
     halve_node_indices(&mut idx[range.clone()], &col);
 
     let mid = (range.start + range.end) / 2;
-    build_subtree(nodes, idx, points, root * 2 + 1, range.start..mid);
-    build_subtree(nodes, idx, points, root * 2 + 2, mid..range.end);
+    build_subtree(nodes, idx, points, left, range.start..mid);
+    build_subtree(nodes, idx, points, left + 1, mid..range.end);
 }
 
 /// Divides the node index array into two equal-sized parts.
@@ -360,7 +366,11 @@ fn max_spread_column(matrix: &ArrayView2<f64>, idx: &[usize]) -> usize {
     let (max_spread_col, _) = spread_iter.fold(
         (0, max_spread),
         |(max_spread_col, max_spread), (i, spread)| {
-            if spread.partial_cmp(&max_spread).unwrap() == cmp::Ordering::Greater {
+            if spread
+                .partial_cmp(&max_spread)
+                .map(|o| o == cmp::Ordering::Greater)
+                .unwrap_or(false)
+            {
                 (i, spread)
             } else {
                 (max_spread_col, max_spread)
