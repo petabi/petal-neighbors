@@ -19,7 +19,7 @@ impl<'a> BallTree<'a> {
     ///
     /// Panics if `points` is empty.
     pub fn new(points: ArrayView2<'a, f64>) -> Self {
-        BallTree::with_distance(points, squared_euclidean_distance)
+        BallTree::with_distance(points, euclidean_distance)
     }
 
     pub fn with_distance(
@@ -66,13 +66,7 @@ impl<'a> BallTree<'a> {
 
     pub fn query_radius(&self, point: &ArrayView1<f64>, distance: f64) -> Vec<Neighbor> {
         let mut neighbors = BinaryHeap::with_capacity(self.points.len());
-        self.nearest_k_neighbors_in_subtree(
-            point,
-            0,
-            distance.powi(2),
-            self.points.len(),
-            &mut neighbors,
-        );
+        self.nearest_k_neighbors_in_subtree(point, 0, distance, self.points.len(), &mut neighbors);
         neighbors.into_sorted_vec()
     }
 
@@ -85,12 +79,12 @@ impl<'a> BallTree<'a> {
         &self,
         point: &ArrayView1<f64>,
         root: usize,
-        radius_squared: f64,
+        radius: f64,
     ) -> Option<Neighbor> {
         let root_node = &self.nodes[root];
         let distance = self.distance;
         let lower_bound = self.nodes[root].distance_lower_bound(point, distance);
-        if lower_bound * lower_bound > radius_squared {
+        if lower_bound > radius {
             return None;
         }
 
@@ -99,19 +93,19 @@ impl<'a> BallTree<'a> {
             let (min_i, min_dist) = self.idx[root_node.range.clone()].iter().fold(
                 (0, std::f64::INFINITY),
                 |(min_i, min_dist), &i| {
-                    let dist_squared = distance(&point, &self.points.row(i));
+                    let dist = distance(&point, &self.points.row(i));
 
-                    if dist_squared < min_dist {
-                        (i, dist_squared)
+                    if dist < min_dist {
+                        (i, dist)
                     } else {
                         (min_i, min_dist)
                     }
                 },
             );
-            if min_dist <= radius_squared {
+            if min_dist <= radius {
                 Some(Neighbor {
                     idx: min_i,
-                    distance: min_dist.sqrt(),
+                    distance: min_dist,
                 })
             } else {
                 None
@@ -126,7 +120,7 @@ impl<'a> BallTree<'a> {
             } else {
                 (child2, child1)
             };
-            match self.nearest_neighbor_in_subtree(point, child1, radius_squared) {
+            match self.nearest_neighbor_in_subtree(point, child1, radius) {
                 Some(neighbor1) => {
                     if let Some(neighbor2) =
                         self.nearest_neighbor_in_subtree(point, child2, neighbor1.distance)
@@ -136,7 +130,7 @@ impl<'a> BallTree<'a> {
                         Some(neighbor1)
                     }
                 }
-                None => self.nearest_neighbor_in_subtree(point, child2, radius_squared),
+                None => self.nearest_neighbor_in_subtree(point, child2, radius),
             }
         }
     }
@@ -150,13 +144,13 @@ impl<'a> BallTree<'a> {
         &self,
         point: &ArrayView1<f64>,
         root: usize,
-        radius_squared: f64,
+        radius: f64,
         k: usize,
         neighbors: &mut BinaryHeap<Neighbor>,
     ) {
         let distance = self.distance;
         let root_node = &self.nodes[root];
-        if root_node.distance_lower_bound(point, distance).powi(2) > radius_squared {
+        if root_node.distance_lower_bound(point, distance) > radius {
             return;
         }
 
@@ -165,10 +159,10 @@ impl<'a> BallTree<'a> {
             self.idx[root_node.range.clone()]
                 .iter()
                 .filter_map(|&i| {
-                    let dist_squared = distance(&point, &self.points.row(i));
+                    let dist = distance(&point, &self.points.row(i));
 
-                    if dist_squared < radius_squared {
-                        Some(Neighbor::new(i, dist_squared.sqrt()))
+                    if dist < radius {
+                        Some(Neighbor::new(i, dist))
                     } else {
                         None
                     }
@@ -193,8 +187,8 @@ impl<'a> BallTree<'a> {
             } else {
                 (child2, child1)
             };
-            self.nearest_k_neighbors_in_subtree(point, child1, radius_squared, k, neighbors);
-            self.nearest_k_neighbors_in_subtree(point, child2, radius_squared, k, neighbors);
+            self.nearest_k_neighbors_in_subtree(point, child1, radius, k, neighbors);
+            self.nearest_k_neighbors_in_subtree(point, child2, radius, k, neighbors);
         }
     }
 }
@@ -242,7 +236,7 @@ impl Eq for Neighbor {}
 struct Node {
     range: Range<usize>,
     centroid: Array1<f64>,
-    radius_squared: f64,
+    radius: f64,
     is_leaf: bool,
 }
 
@@ -260,7 +254,7 @@ impl Node {
             })
             / idx.len() as f64;
 
-        self.radius_squared = idx.iter().fold(0., |max, &i| {
+        self.radius = idx.iter().fold(0., |max, &i| {
             f64::max(distance(&self.centroid.view(), &points.row(i)), max)
         });
     }
@@ -269,8 +263,8 @@ impl Node {
     where
         D: Fn(&ArrayView1<f64>, &ArrayView1<f64>) -> f64,
     {
-        let centroid_dist = distance(&point, &self.centroid.view()).sqrt();
-        let lb = centroid_dist - self.radius_squared.sqrt();
+        let centroid_dist = distance(&point, &self.centroid.view());
+        let lb = centroid_dist - self.radius;
         if lb < 0. {
             0.
         } else {
@@ -284,7 +278,7 @@ impl Default for Node {
         Node {
             range: (0..0),
             centroid: Array1::from(vec![]),
-            radius_squared: 0.,
+            radius: 0.,
             is_leaf: false,
         }
     }
@@ -359,8 +353,8 @@ fn halve_node_indices(idx: &mut [usize], col: &ArrayView1<f64>) {
 }
 
 /// Calculates the squared euclidean distance of two points.
-fn squared_euclidean_distance(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
-    (a - b).mapv(|x| x.powi(2)).sum()
+fn euclidean_distance(a: &ArrayView1<f64>, b: &ArrayView1<f64>) -> f64 {
+    (a - b).mapv(|x| x.powi(2)).sum().sqrt()
 }
 
 /// Finds the column with the maximum spread.
@@ -500,13 +494,13 @@ mod test {
 
     #[test]
     fn node_init() {
-        let distance = squared_euclidean_distance;
+        let distance = euclidean_distance;
         let data = [[0., 1.], [0., 9.], [0., 2.]];
         let idx: [usize; 3] = [0, 1, 2];
         let mut node = Node::default();
         node.init(&aview2(&data), &idx, distance);
         assert_eq!(node.centroid, aview1(&[0., 4.]));
-        assert_eq!(node.radius_squared, 25.);
+        assert_eq!(node.radius, 5.);
 
         let idx: [usize; 2] = [0, 2];
         node.init(&aview2(&data), &idx, distance);
