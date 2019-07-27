@@ -193,7 +193,7 @@ impl<'a> BallTree<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Neighbor {
     pub idx: usize,
     pub distance: f64,
@@ -398,7 +398,7 @@ fn max_spread_column(matrix: &ArrayView2<f64>, idx: &[usize]) -> usize {
 #[cfg(test)]
 mod test {
     use super::*;
-    use ndarray::{aview1, aview2};
+    use ndarray::{aview1, aview2, Axis};
 
     #[test]
     #[should_panic]
@@ -573,5 +573,23 @@ mod test {
         let data = [[0., 1.], [0., 9.], [0., 2.]];
         let idx: [usize; 3] = [0, 1, 2];
         assert_eq!(super::max_spread_column(&aview2(&data), &idx), 1);
+    }
+
+    fn naive_k_nearest_neighbors<'a>(
+        neighbors: &ArrayView2<'a, f64>,
+        point: &ArrayView1<f64>,
+        k: usize,
+        distance: fn(&ArrayView1<f64>, &ArrayView1<f64>) -> f64,
+    ) -> Vec<Neighbor> {
+        let mut knn = neighbors
+            .axis_iter(Axis(0))
+            .enumerate()
+            .map(|(i, n)| Neighbor {
+                idx: i,
+                distance: distance(&n, point),
+            })
+            .collect::<Vec<Neighbor>>();
+        knn.sort();
+        knn[0..k].to_vec()
     }
 }
