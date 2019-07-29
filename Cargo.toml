@@ -6,3 +6,6 @@ edition = "2018"
 
 [dependencies]
 ndarray = "0.12"
+
+[dev-dependencies]
+rand = "0.7"
