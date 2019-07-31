@@ -64,10 +64,8 @@ impl<'a> BallTree<'a> {
         neighbors.into_sorted_vec()
     }
 
-    pub fn query_radius(&self, point: &ArrayView1<f64>, distance: f64) -> Vec<Neighbor> {
-        let mut neighbors = BinaryHeap::with_capacity(self.points.len());
-        self.nearest_k_neighbors_in_subtree(point, 0, distance, self.points.len(), &mut neighbors);
-        neighbors.into_sorted_vec()
+    pub fn query_radius(&self, point: &ArrayView1<f64>, distance: f64) -> Vec<usize> {
+        self.neighbors_within_radius_in_subtree(point, distance, 0)
     }
 
     /// Finds the nearest neighbor within the radius in the subtree rooted at `root`.
@@ -191,6 +189,59 @@ impl<'a> BallTree<'a> {
             self.nearest_k_neighbors_in_subtree(point, child2, radius, k, neighbors);
         }
     }
+
+    /// Finds the neighbors within the radius in the subtree rooted at `root`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `root` is out of bound.
+    fn neighbors_within_radius_in_subtree(
+        &self,
+        point: &ArrayView1<f64>,
+        radius: f64,
+        root: usize,
+    ) -> Vec<usize> {
+        let mut neighbors = Vec::new();
+        let distance = self.distance;
+        let mut subtrees_to_visit = vec![root];
+
+        loop {
+            let root = subtrees_to_visit.pop().expect("should not be empty");
+            let root_node = &self.nodes[root];
+            let (lb, ub) = root_node.distance_bounds(point, distance);
+
+            if lb > radius {
+                if subtrees_to_visit.is_empty() {
+                    break;
+                }
+                continue;
+            }
+
+            if ub <= radius {
+                neighbors.reserve(root_node.range.end - root_node.range.start);
+                neighbors.extend(self.idx[root_node.range.clone()].iter().cloned());
+            } else if root_node.is_leaf {
+                let point = ArrayView1::from(point);
+                neighbors.extend(self.idx[root_node.range.clone()].iter().filter_map(|&i| {
+                    let dist = distance(&point, &self.points.row(i));
+                    if dist < radius {
+                        Some(i)
+                    } else {
+                        None
+                    }
+                }));
+            } else {
+                subtrees_to_visit.push(root * 2 + 1);
+                subtrees_to_visit.push(root * 2 + 2);
+            }
+
+            if subtrees_to_visit.is_empty() {
+                break;
+            }
+        }
+
+        neighbors
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -257,6 +308,19 @@ impl Node {
         self.radius = idx.iter().fold(0., |max, &i| {
             f64::max(distance(&self.centroid.view(), &points.row(i)), max)
         });
+    }
+
+    fn distance_bounds<D>(&self, point: &ArrayView1<f64>, distance: D) -> (f64, f64)
+    where
+        D: Fn(&ArrayView1<f64>, &ArrayView1<f64>) -> f64,
+    {
+        let centroid_dist = distance(&point, &self.centroid.view());
+        let mut lb = centroid_dist - self.radius;
+        if lb < 0. {
+            lb = 0.;
+        }
+        let ub = centroid_dist + self.radius;
+        (lb, ub)
     }
 
     fn distance_lower_bound<D>(&self, point: &ArrayView1<f64>, distance: D) -> f64
@@ -423,13 +487,9 @@ mod test {
         let neighbors = tree.query(&point, 1);
         assert_eq!(neighbors.len(), 1);
         assert!(neighbors[0].approx_eq(&neighbor));
-        let neighbors = tree.query_radius(&point, 2.);
-        assert_eq!(neighbors.len(), 2);
-        assert!(neighbors[0].approx_eq(&neighbor));
-        assert!(neighbors[1].approx_eq(&Neighbor {
-            idx: 1,
-            distance: (1f64 + 1.1f64 * 1.1f64).sqrt()
-        }));
+        let mut neighbors = tree.query_radius(&point, 2.);
+        neighbors.sort_unstable();
+        assert_eq!(neighbors, &[0, 1]);
 
         let point = aview1(&[1.1, 1.2]);
         let neighbor = tree.query_one(&point);
@@ -510,6 +570,22 @@ mod test {
                 assert_eq!(n_bt.distance, n_naive.distance);
             }
         }
+    }
+
+    #[test]
+    fn ball_tree_query_radius() {
+        let data = vec![[0.], [2.], [3.], [4.], [6.], [8.], [10.]];
+        let bt = BallTree::new(aview2(&data));
+
+        let neighbors = bt.query_radius(&aview1(&[0.1]), 1.);
+        assert_eq!(neighbors, &[0]);
+
+        let mut neighbors = bt.query_radius(&aview1(&[3.2]), 1.);
+        neighbors.sort_unstable();
+        assert_eq!(neighbors, &[2, 3]);
+
+        let neighbors = bt.query_radius(&aview1(&[9.]), 0.9);
+        assert!(neighbors.is_empty());
     }
 
     #[test]
