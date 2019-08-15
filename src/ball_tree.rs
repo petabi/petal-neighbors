@@ -174,7 +174,6 @@ impl<'a> BallTree<'a> {
                     }
                     neighbors
                 });
-            return;
         } else {
             let child1 = root * 2 + 1;
             let child2 = child1 + 1;
