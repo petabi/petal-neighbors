@@ -1,6 +1,7 @@
 use ndarray::{Array1, ArrayView1, ArrayView2};
 use std::cmp;
 use std::collections::BinaryHeap;
+use std::convert::TryFrom;
 use std::mem::size_of;
 use std::ops::Range;
 
@@ -34,8 +35,9 @@ impl<'a> BallTree<'a> {
             n_points > 0,
             "A ball tree needs at least one point for initialization."
         );
-        let height = (size_of::<usize>() * 8) as u32 - n_points.leading_zeros();
-        let size = 1usize.wrapping_shl(height) - 1;
+        let height = u32::try_from(size_of::<usize>() * 8).expect("smaller than u32::max_value()")
+            - n_points.leading_zeros();
+        let size = 1_usize.wrapping_shl(height) - 1;
 
         let mut idx: Vec<usize> = (0..n_points).collect();
         let mut nodes = vec![Node::default(); size];
@@ -205,8 +207,8 @@ impl<'a> BallTree<'a> {
         let mut subtrees_to_visit = vec![root];
 
         loop {
-            let root = subtrees_to_visit.pop().expect("should not be empty");
-            let root_node = &self.nodes[root];
+            let subroot = subtrees_to_visit.pop().expect("should not be empty");
+            let root_node = &self.nodes[subroot];
             let (lb, ub) = root_node.distance_bounds(point, distance);
 
             if lb > radius {
@@ -230,8 +232,8 @@ impl<'a> BallTree<'a> {
                     }
                 }));
             } else {
-                subtrees_to_visit.push(root * 2 + 1);
-                subtrees_to_visit.push(root * 2 + 2);
+                subtrees_to_visit.push(subroot * 2 + 1);
+                subtrees_to_visit.push(subroot * 2 + 2);
             }
 
             if subtrees_to_visit.is_empty() {
@@ -251,10 +253,10 @@ pub struct Neighbor {
 
 impl Neighbor {
     pub fn new(idx: usize, distance: f64) -> Self {
-        Neighbor { idx, distance }
+        Self { idx, distance }
     }
 
-    pub fn approx_eq(&self, other: &Neighbor) -> bool {
+    pub fn approx_eq(&self, other: &Self) -> bool {
         self.idx == other.idx
             && self.distance - std::f64::EPSILON < other.distance
             && other.distance < self.distance + std::f64::EPSILON
@@ -338,7 +340,7 @@ impl Node {
 
 impl Default for Node {
     fn default() -> Self {
-        Node {
+        Self {
             range: (0..0),
             centroid: Array1::from(vec![]),
             radius: 0.,
@@ -446,8 +448,7 @@ fn max_spread_column(matrix: &ArrayView2<f64>, idx: &[usize]) -> usize {
         |(max_spread_col, max_spread), (i, spread)| {
             if spread
                 .partial_cmp(&max_spread)
-                .map(|o| o == cmp::Ordering::Greater)
-                .unwrap_or(false)
+                .map_or(false, |o| o == cmp::Ordering::Greater)
             {
                 (i, spread)
             } else {
