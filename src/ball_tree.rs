@@ -298,7 +298,7 @@ impl Node {
     {
         self.centroid = idx
             .iter()
-            .fold(Array1::<f64>::zeros(points.cols()), |mut c, &i| {
+            .fold(Array1::<f64>::zeros(points.ncols()), |mut c, &i| {
                 c += &points.row(i);
                 c
             })
@@ -378,7 +378,7 @@ fn build_subtree<D>(
 
     #[allow(clippy::deref_addrof)]
     let col_idx = max_spread_column(points, &idx[range.clone()]);
-    debug_assert!(col_idx < points.cols());
+    debug_assert!(col_idx < points.ncols());
     let col = points.column(col_idx);
     halve_node_indices(&mut idx[range.clone()], &col);
 

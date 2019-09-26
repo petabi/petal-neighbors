@@ -5,7 +5,7 @@ authors = ["Min Kim <msk@dolbo.net>"]
 edition = "2018"
 
 [dependencies]
-ndarray = "0.12"
+ndarray = "0.13"
 
 [dev-dependencies]
 rand = "0.7"
