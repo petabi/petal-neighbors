@@ -294,6 +294,8 @@ struct Node {
 
 impl Node {
     /// Computes the centroid of the node.
+    #[allow(clippy::cast_precision_loss)] // The precision provided by 54-bit-wide mantissa is
+                                          // good enough in computing mean.
     fn init<D>(&mut self, points: &ArrayView2<f64>, idx: &[usize], distance: D)
     where
         D: Fn(&ArrayView1<f64>, &ArrayView1<f64>) -> f64,
