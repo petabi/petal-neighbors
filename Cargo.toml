@@ -11,4 +11,9 @@ edition = "2018"
 ndarray = "0.13"
 
 [dev-dependencies]
+criterion = "0.3"
 rand = "0.7"
+
+[[bench]]
+name = "ball_tree"
+harness = false
