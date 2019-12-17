@@ -3,6 +3,20 @@ use ndarray::ArrayView;
 use petal_neighbors::{distance, BallTree};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
+fn build(c: &mut Criterion) {
+    let n = black_box(128);
+    let dim = black_box(10);
+
+    let mut rng = StdRng::from_seed(*b"ball tree query_radius test seed");
+    let data: Vec<f64> = (0..n * dim).map(|_| rng.gen()).collect();
+    let array = ArrayView::from_shape((n, dim), &data).unwrap();
+    c.bench_function("build", |b| {
+        b.iter(|| {
+            BallTree::with_metric(array.clone(), distance::EUCLIDEAN);
+        })
+    });
+}
+
 fn query_radius(c: &mut Criterion) {
     let n = black_box(64);
     let dim = black_box(10);
@@ -21,5 +35,5 @@ fn query_radius(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, query_radius);
+criterion_group!(benches, build, query_radius);
 criterion_main!(benches);
