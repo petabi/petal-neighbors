@@ -264,10 +264,12 @@ pub struct Neighbor {
 }
 
 impl Neighbor {
+    #[must_use]
     pub fn new(idx: usize, distance: f64) -> Self {
         Self { idx, distance }
     }
 
+    #[must_use]
     pub fn approx_eq(&self, other: &Self) -> bool {
         self.idx == other.idx
             && self.distance - std::f64::EPSILON < other.distance
@@ -276,18 +278,21 @@ impl Neighbor {
 }
 
 impl Ord for Neighbor {
+    #[must_use]
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.partial_cmp(other).unwrap()
     }
 }
 
 impl PartialOrd for Neighbor {
+    #[must_use]
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         self.distance.partial_cmp(&other.distance)
     }
 }
 
 impl PartialEq for Neighbor {
+    #[must_use]
     fn eq(&self, other: &Self) -> bool {
         self.distance == other.distance
     }
