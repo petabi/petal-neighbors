@@ -1,5 +1,5 @@
 use crate::distance::Metric;
-use ndarray::{ArrayView1, ArrayView2};
+use ndarray::{ArrayBase, ArrayView1, Data, Ix2};
 use std::cmp;
 use std::collections::BinaryHeap;
 use std::convert::TryFrom;
@@ -8,20 +8,28 @@ use std::ops::Range;
 
 /// A data structure for neighbor search in a multi-dimensional space.
 #[derive(Debug)]
-pub struct BallTree<'a, M: Metric> {
-    points: ArrayView2<'a, f64>,
+pub struct BallTree<'a, D, M>
+where
+    D: Data<Elem = f64>,
+    M: Metric,
+{
+    points: &'a ArrayBase<D, Ix2>,
     idx: Vec<usize>,
     nodes: Vec<Node>,
     metric: M,
 }
 
-impl<'a, M: Metric> BallTree<'a, M> {
+impl<'a, D, M> BallTree<'a, D, M>
+where
+    D: Data<Elem = f64>,
+    M: Metric,
+{
     /// Builds a ball tree containing the given points.
     ///
     /// # Panics
     ///
     /// Panics if `points` is empty.
-    pub fn with_metric(points: ArrayView2<'a, f64>, metric: M) -> Self {
+    pub fn with_metric(points: &'a ArrayBase<D, Ix2>, metric: M) -> Self {
         let n_points: usize = *points
             .shape()
             .first()
@@ -313,7 +321,11 @@ impl Node {
     /// Computes the centroid of the node.
     #[allow(clippy::cast_precision_loss)] // The precision provided by 54-bit-wide mantissa is
                                           // good enough in computing mean.
-    fn init<M: Metric>(&mut self, points: &ArrayView2<f64>, idx: &[usize], metric: &M) {
+    fn init<D, M>(&mut self, points: &ArrayBase<D, Ix2>, idx: &[usize], metric: &M)
+    where
+        D: Data<Elem = f64>,
+        M: Metric,
+    {
         let mut sum = idx.iter().fold(vec![0_f64; points.ncols()], |mut sum, &i| {
             for (s, v) in sum.iter_mut().zip(points.row(i)) {
                 *s += v;
@@ -381,14 +393,17 @@ impl Default for Node {
 /// # Panics
 ///
 /// Panics if `root` or `range` is out of range.
-fn build_subtree<M: Metric>(
+fn build_subtree<D, M>(
     nodes: &mut [Node],
     idx: &mut [usize],
-    points: &ArrayView2<f64>,
+    points: &ArrayBase<D, Ix2>,
     root: usize,
     range: Range<usize>,
     metric: &M,
-) {
+) where
+    D: Data<Elem = f64>,
+    M: Metric,
+{
     let n_nodes = nodes.len();
     let mut root_node = nodes.get_mut(root).expect("root node index out of range");
     root_node.init(
@@ -448,7 +463,10 @@ fn halve_node_indices(idx: &mut [usize], col: &ArrayView1<f64>) {
 ///
 /// Panics if either `matrix` or `idx` is empty, or any element of `idx` is
 /// greater than or equal to the number of rows in `matrix`.
-fn max_spread_column(matrix: &ArrayView2<f64>, idx: &[usize]) -> usize {
+fn max_spread_column<D>(matrix: &ArrayBase<D, Ix2>, idx: &[usize]) -> usize
+where
+    D: Data<Elem = f64>,
+{
     let mut spread_iter = matrix
         .gencolumns()
         .into_iter()
@@ -483,21 +501,24 @@ fn max_spread_column(matrix: &ArrayView2<f64>, idx: &[usize]) -> usize {
 mod test {
     use super::*;
     use crate::distance;
-    use ndarray::{aview1, aview2, ArrayView, Axis};
-    use rand::prelude::*;
+    use ndarray::{array, aview1, aview2, Array, Axis};
+    use ndarray_rand::rand_distr::Uniform;
+    use ndarray_rand::RandomExt;
 
     #[test]
     #[should_panic]
     fn ball_tree_empty() {
         let data: [[f64; 0]; 0] = [];
-        let _tree = BallTree::with_metric(aview2(&data), distance::EUCLIDEAN);
+        let array = aview2(&data);
+        let tree = BallTree::with_metric(&array, distance::EUCLIDEAN);
+        let point = [0., 0.];
+        tree.query_one(&point);
     }
 
     #[test]
     fn ball_tree_3() {
-        let data = [[1., 1.], [1., 1.1], [9., 9.]];
-        let view = aview2(&data);
-        let tree = BallTree::with_metric(view, distance::EUCLIDEAN);
+        let array = array![[1., 1.], [1., 1.1], [9., 9.]];
+        let tree = BallTree::with_metric(&array, distance::EUCLIDEAN);
 
         let point = [0., 0.];
         let neighbor = tree.query_one(&point);
@@ -535,7 +556,7 @@ mod test {
 
     #[test]
     fn ball_tree_6() {
-        let data = vec![
+        let array = array![
             [1.0, 2.0],
             [1.1, 2.2],
             [0.9, 1.9],
@@ -543,8 +564,7 @@ mod test {
             [-2.0, 3.0],
             [-2.2, 3.1],
         ];
-        let view = aview2(&data);
-        let tree = BallTree::with_metric(view, distance::EUCLIDEAN);
+        let tree = BallTree::with_metric(&array, distance::EUCLIDEAN);
 
         let point = [1., 2.];
         let neighbor = tree.query_one(&point);
@@ -556,7 +576,7 @@ mod test {
 
     #[test]
     fn ball_tree_identical_points() {
-        let data = vec![
+        let array = array![
             [1.0, 1.0],
             [1.0, 1.0],
             [1.0, 1.0],
@@ -566,8 +586,7 @@ mod test {
             [1.0, 1.0],
             [1.0, 1.0],
         ];
-        let view = aview2(&data);
-        let tree = BallTree::with_metric(view, distance::EUCLIDEAN);
+        let tree = BallTree::with_metric(&array, distance::EUCLIDEAN);
 
         let point = [1., 2.];
         let neighbor = tree.query_one(&point);
@@ -578,15 +597,18 @@ mod test {
     fn ball_tree_query() {
         const DIMENSION: usize = 3;
 
-        let mut rng = rand::thread_rng();
-        let data: Vec<f64> = (0..40 * DIMENSION).map(|_| rng.gen()).collect();
-        let array = ArrayView::from_shape((40, DIMENSION), &data).unwrap();
-        let bt = BallTree::with_metric(array.clone(), distance::EUCLIDEAN);
+        let array = Array::random((40, DIMENSION), Uniform::new(0., 1.));
+        let bt = BallTree::with_metric(&array, distance::EUCLIDEAN);
         for _ in 0..10 {
-            let query: Vec<f64> = (0..DIMENSION).map(|_| rng.gen()).collect();
-            let bt_neighbors = bt.query(query.as_slice(), 5);
-            let naive_neighbors =
-                naive_k_nearest_neighbors(&array, query.as_slice(), 5, distance::EUCLIDEAN);
+            let query = Array::random(DIMENSION, Uniform::new(0., 1.));
+            //let query: Vec<f64> = (0..DIMENSION).map(|_| rng.gen()).collect();
+            let bt_neighbors = bt.query(query.as_slice().expect("should be contiguous"), 5);
+            let naive_neighbors = naive_k_nearest_neighbors(
+                &array,
+                query.as_slice().expect("should be contiguous"),
+                5,
+                distance::EUCLIDEAN,
+            );
             for (n_bt, n_naive) in bt_neighbors.iter().zip(naive_neighbors.iter()) {
                 assert_eq!(n_bt.distance, n_naive.distance);
             }
@@ -595,8 +617,8 @@ mod test {
 
     #[test]
     fn ball_tree_query_radius() {
-        let data = vec![[0.], [2.], [3.], [4.], [6.], [8.], [10.]];
-        let bt = BallTree::with_metric(aview2(&data), distance::EUCLIDEAN);
+        let array = array![[0.], [2.], [3.], [4.], [6.], [8.], [10.]];
+        let bt = BallTree::with_metric(&array, distance::EUCLIDEAN);
 
         let neighbors = bt.query_radius(&[0.1], 1.);
         assert_eq!(neighbors, &[0]);
@@ -691,12 +713,16 @@ mod test {
         assert_eq!(super::max_spread_column(&aview2(&data), &idx), 1);
     }
 
-    fn naive_k_nearest_neighbors<'a, M: Metric>(
-        neighbors: &ArrayView2<'a, f64>,
+    fn naive_k_nearest_neighbors<'a, D, M>(
+        neighbors: &'a ArrayBase<D, Ix2>,
         point: &[f64],
         k: usize,
         metric: M,
-    ) -> Vec<Neighbor> {
+    ) -> Vec<Neighbor>
+    where
+        D: Data<Elem = f64>,
+        M: Metric,
+    {
         let mut knn = neighbors
             .axis_iter(Axis(0))
             .enumerate()
