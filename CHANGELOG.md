@@ -18,5 +18,5 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - A ball tree data structure to find nearest neighbors.
 
-[0.2.0]: https://github.com/petabi/petal-neighbors/compare/0.1.1...0.2.0
+[0.2.0]: https://github.com/petabi/petal-neighbors/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/petabi/petal-neighbors/tree/0.1.0
