@@ -1,6 +1,6 @@
 [package]
 name = "petal-neighbors"
-version = "0.2.0"
+version = "0.3.0"
 description = "A ball tree data structure for nearest neighbor search."
 readme = "README.md"
 homepage = "https://github.com/petabi/petal-neighbors"
