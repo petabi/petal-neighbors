@@ -3,6 +3,8 @@ use ndarray::{ArrayBase, ArrayView1, CowArray, Data, Ix2};
 use std::cmp;
 use std::collections::BinaryHeap;
 use std::convert::TryFrom;
+use std::error;
+use std::fmt;
 use std::mem::size_of;
 use std::ops::Range;
 
@@ -24,10 +26,10 @@ where
 {
     /// Builds a ball tree containing the given points.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if `points` is empty.
-    pub fn with_metric<T>(points: T, metric: M) -> Self
+    /// Returns an error if `points` is an empty array.
+    pub fn with_metric<T>(points: T, metric: M) -> Result<Self, EmptyArrayError>
     where
         T: Into<CowArray<'a, f64, Ix2>>,
     {
@@ -36,10 +38,10 @@ where
             .shape()
             .first()
             .expect("ArrayView2 should have two dimensions");
-        assert!(
-            n_points > 0,
-            "A ball tree needs at least one point for initialization."
-        );
+        if n_points == 0 {
+            return Err(EmptyArrayError {});
+        }
+
         let height = u32::try_from(size_of::<usize>() * 8).expect("smaller than u32::max_value()")
             - n_points.leading_zeros();
         let size = 1_usize.wrapping_shl(height) - 1;
@@ -47,19 +49,15 @@ where
         let mut idx: Vec<usize> = (0..n_points).collect();
         let mut nodes = vec![Node::default(); size];
         build_subtree(&mut nodes, &mut idx, &points, 0, 0..n_points, &metric);
-        BallTree {
+        Ok(BallTree {
             points,
             idx,
             nodes,
             metric,
-        }
+        })
     }
 
     /// Finds the nearest neighbor and its distance in the tree.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the tree is empty.
     pub fn query_one<'p, P>(&self, point: P) -> Neighbor
     where
         P: 'p + Copy + IntoIterator,
@@ -266,6 +264,19 @@ where
         neighbors
     }
 }
+
+/// An error returned when an empty array is given as an argument to a function
+/// requiring a non-empty array.
+#[derive(Debug)]
+pub struct EmptyArrayError;
+
+impl fmt::Display for EmptyArrayError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "input array is empty")
+    }
+}
+
+impl error::Error for EmptyArrayError {}
 
 #[derive(Clone, Debug)]
 pub struct Neighbor {
@@ -509,7 +520,8 @@ mod test {
     #[should_panic]
     fn ball_tree_empty() {
         let data: [[f64; 0]; 0] = [];
-        let tree = BallTree::with_metric(aview2(&data), distance::EUCLIDEAN);
+        let tree = BallTree::with_metric(aview2(&data), distance::EUCLIDEAN)
+            .expect("`data` should not be empty");
         let point = [0., 0.];
         tree.query_one(&point);
     }
@@ -517,7 +529,8 @@ mod test {
     #[test]
     fn ball_tree_3() {
         let array = array![[1., 1.], [1., 1.1], [9., 9.]];
-        let tree = BallTree::with_metric(array, distance::EUCLIDEAN);
+        let tree =
+            BallTree::with_metric(array, distance::EUCLIDEAN).expect("`array` should not be empty");
 
         let point = [0., 0.];
         let neighbor = tree.query_one(&point);
@@ -563,7 +576,8 @@ mod test {
             [-2.0, 3.0],
             [-2.2, 3.1],
         ];
-        let tree = BallTree::with_metric(array, distance::EUCLIDEAN);
+        let tree =
+            BallTree::with_metric(array, distance::EUCLIDEAN).expect("`array` should not be empty");
 
         let point = [1., 2.];
         let neighbor = tree.query_one(&point);
@@ -585,7 +599,8 @@ mod test {
             [1.0, 1.0],
             [1.0, 1.0],
         ];
-        let tree = BallTree::with_metric(array, distance::EUCLIDEAN);
+        let tree =
+            BallTree::with_metric(array, distance::EUCLIDEAN).expect("`array` should not be empty");
 
         let point = [1., 2.];
         let neighbor = tree.query_one(&point);
@@ -597,10 +612,10 @@ mod test {
         const DIMENSION: usize = 3;
 
         let array = Array::random((40, DIMENSION), Uniform::new(0., 1.));
-        let bt = BallTree::with_metric(array.view(), distance::EUCLIDEAN);
+        let bt = BallTree::with_metric(array.view(), distance::EUCLIDEAN)
+            .expect("`array` should not be empty");
         for _ in 0..10 {
             let query = Array::random(DIMENSION, Uniform::new(0., 1.));
-            //let query: Vec<f64> = (0..DIMENSION).map(|_| rng.gen()).collect();
             let bt_neighbors = bt.query(query.as_slice().expect("should be contiguous"), 5);
             let naive_neighbors = naive_k_nearest_neighbors(
                 &array,
@@ -617,7 +632,8 @@ mod test {
     #[test]
     fn ball_tree_query_radius() {
         let array = array![[0.], [2.], [3.], [4.], [6.], [8.], [10.]];
-        let bt = BallTree::with_metric(array, distance::EUCLIDEAN);
+        let bt =
+            BallTree::with_metric(array, distance::EUCLIDEAN).expect("`array` should not be empty");
 
         let neighbors = bt.query_radius(&[0.1], 1.);
         assert_eq!(neighbors, &[0]);
