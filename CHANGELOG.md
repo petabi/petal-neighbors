@@ -11,6 +11,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - The ownership of the input can be transferred to `BallTree`, which accepts
   both an owned array and a view.
+- An error is returned, rather than a panic, if an empty array is given to
+  construct a `BallTree`.
+- `query_one` has been renamed `query_nearest`.
+- `query` returns indices and distances separately, so that data of the same
+  type are stored together.
 
 ## [0.2.0] - 2020-04-09
 

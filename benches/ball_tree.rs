@@ -12,7 +12,7 @@ fn build(c: &mut Criterion) {
     let array = ArrayView::from_shape((n, dim), &data).unwrap();
     c.bench_function("build", |b| {
         b.iter(|| {
-            BallTree::with_metric(array, distance::EUCLIDEAN);
+            BallTree::new(array, distance::EUCLIDEAN).expect("`array` is not empty");
         })
     });
 }
@@ -24,7 +24,7 @@ fn query_radius(c: &mut Criterion) {
     let mut rng = StdRng::from_seed(*b"ball tree query_radius test seed");
     let data: Vec<f64> = (0..n * dim).map(|_| rng.gen()).collect();
     let array = ArrayView::from_shape((n, dim), &data).unwrap();
-    let tree = BallTree::with_metric(array, distance::EUCLIDEAN);
+    let tree = BallTree::new(array, distance::EUCLIDEAN).expect("`array` is not empty");
     c.bench_function("query_radius", |b| {
         b.iter(|| {
             for i in 0..n {
