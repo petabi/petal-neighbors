@@ -1,7 +1,8 @@
 [package]
 name = "petal-neighbors"
 version = "0.2.0"
-description = "A ball tree data structure for neighbor search."
+description = "A ball tree data structure for nearest neighbor search."
+readme = "README.md"
 homepage = "https://github.com/petabi/petal-neighbors"
 repository = "https://github.com/petabi/petal-neighbors"
 license = "Apache-2.0"
@@ -19,6 +20,7 @@ codecov = { repository = "petabi/petal-neighbors", service = "github" }
 ndarray = "0.13"
 
 [dev-dependencies]
+approx = "0.3"
 criterion = "0.3"
 ndarray-rand = "0.11"
 

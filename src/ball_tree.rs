@@ -8,7 +8,7 @@ use std::fmt;
 use std::mem::size_of;
 use std::ops::Range;
 
-/// A data structure for neighbor search in a multi-dimensional space.
+/// A data structure for nearest neighbor search in a multi-dimensional space.
 #[derive(Debug)]
 pub struct BallTree<'a, M>
 where
@@ -24,12 +24,12 @@ impl<'a, M> BallTree<'a, M>
 where
     M: Metric,
 {
-    /// Builds a ball tree containing the given points.
+    /// Builds a ball tree using the given distance metric.
     ///
     /// # Errors
     ///
     /// Returns an error if `points` is an empty array.
-    pub fn with_metric<T>(points: T, metric: M) -> Result<Self, EmptyArrayError>
+    pub fn new<T>(points: T, metric: M) -> Result<Self, EmptyArrayError>
     where
         T: Into<CowArray<'a, f64, Ix2>>,
     {
@@ -58,25 +58,69 @@ where
     }
 
     /// Finds the nearest neighbor and its distance in the tree.
-    pub fn query_one<'p, P>(&self, point: P) -> Neighbor
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ndarray::array;
+    /// use petal_neighbors::{BallTree, distance};
+    ///
+    /// let points = array![[1., 1.], [1., 2.], [9., 9.]];
+    /// let tree = BallTree::new(points, distance::EUCLIDEAN).expect("non-empty input");
+    /// let (index, distance) = tree.query_nearest(&[8., 8.]);
+    /// assert_eq!(index, 2);  // points[2] is the nearest.
+    /// assert!((2_f64.sqrt() - distance).abs() < 1e-8);
+    /// ```
+    pub fn query_nearest<'p, P>(&self, point: P) -> (usize, f64)
     where
         P: 'p + Copy + IntoIterator,
         <P as IntoIterator>::Item: Copy + Into<&'p f64>,
     {
         self.nearest_neighbor_in_subtree(point, 0, std::f64::INFINITY)
-            .unwrap()
+            .expect("0 is a valid index")
     }
 
-    pub fn query<'p, P>(&self, point: P, k: usize) -> Vec<Neighbor>
+    /// Finds the nearest `k` neighbors and their distances in the tree. The
+    /// return values are sorted in the ascending order in distance.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ndarray::array;
+    /// use petal_neighbors::{BallTree, distance};
+    ///
+    /// let points = array![[1., 1.], [1., 2.], [9., 9.]];
+    /// let tree = BallTree::new(points, distance::EUCLIDEAN).expect("non-empty input");
+    /// let (indices, distances) = tree.query(&[3., 3.], 2);
+    /// assert_eq!(indices, &[1, 0]);  // points[1] is the nearest, followed by points[0].
+    /// ```
+    pub fn query<'p, P>(&self, point: P, k: usize) -> (Vec<usize>, Vec<f64>)
     where
         P: 'p + Copy + IntoIterator,
         <P as IntoIterator>::Item: Copy + Into<&'p f64>,
     {
         let mut neighbors = BinaryHeap::with_capacity(k);
         self.nearest_k_neighbors_in_subtree(point, 0, std::f64::INFINITY, k, &mut neighbors);
-        neighbors.into_sorted_vec()
+        let sorted = neighbors.into_sorted_vec();
+        let indices = sorted.iter().map(|v| v.idx).collect();
+        let distances = sorted.iter().map(|v| v.distance).collect();
+        (indices, distances)
     }
 
+    /// Finds all neighbors whose distances from `point` are less than or equal
+    /// to `distance`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ndarray::array;
+    /// use petal_neighbors::{BallTree, distance};
+    ///
+    /// let points = array![[1., 0.], [2., 0.], [9., 0.]];
+    /// let tree = BallTree::new(points, distance::EUCLIDEAN).expect("non-empty input");
+    /// let indices = tree.query_radius(&[3., 0.], 1.5);
+    /// assert_eq!(indices, &[1]);  // The distance to points[1] is less than 1.5.
+    /// ```
     pub fn query_radius<'p, P>(&self, point: P, distance: f64) -> Vec<usize>
     where
         P: 'p + Copy + IntoIterator,
@@ -85,7 +129,7 @@ where
         self.neighbors_within_radius_in_subtree(point, distance, 0)
     }
 
-    /// Finds the nearest neighbor within the radius in the subtree rooted at `root`.
+    /// Finds the nearest neighbor and its distance in the subtree rooted at `root`.
     ///
     /// # Panics
     ///
@@ -95,7 +139,7 @@ where
         point: P,
         root: usize,
         radius: f64,
-    ) -> Option<Neighbor>
+    ) -> Option<(usize, f64)>
     where
         P: 'p + Copy + IntoIterator,
         <P as IntoIterator>::Item: Copy + Into<&'p f64>,
@@ -120,10 +164,7 @@ where
                 },
             );
             if min_dist <= radius {
-                Some(Neighbor {
-                    idx: min_i,
-                    distance: min_dist,
-                })
+                Some((min_i, min_dist))
             } else {
                 None
             }
@@ -140,7 +181,7 @@ where
             match self.nearest_neighbor_in_subtree(point, child1, radius) {
                 Some(neighbor1) => {
                     if let Some(neighbor2) =
-                        self.nearest_neighbor_in_subtree(point, child2, neighbor1.distance)
+                        self.nearest_neighbor_in_subtree(point, child2, neighbor1.1)
                     {
                         Some(neighbor2)
                     } else {
@@ -279,7 +320,7 @@ impl fmt::Display for EmptyArrayError {
 impl error::Error for EmptyArrayError {}
 
 #[derive(Clone, Debug)]
-pub struct Neighbor {
+struct Neighbor {
     pub idx: usize,
     pub distance: f64,
 }
@@ -288,13 +329,6 @@ impl Neighbor {
     #[must_use]
     pub fn new(idx: usize, distance: f64) -> Self {
         Self { idx, distance }
-    }
-
-    #[must_use]
-    pub fn approx_eq(&self, other: &Self) -> bool {
-        self.idx == other.idx
-            && self.distance - std::f64::EPSILON < other.distance
-            && other.distance < self.distance + std::f64::EPSILON
     }
 }
 
@@ -512,6 +546,7 @@ where
 mod test {
     use super::*;
     use crate::distance;
+    use approx;
     use ndarray::{array, aview1, aview2, Array, Axis};
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
@@ -520,50 +555,52 @@ mod test {
     #[should_panic]
     fn ball_tree_empty() {
         let data: [[f64; 0]; 0] = [];
-        let tree = BallTree::with_metric(aview2(&data), distance::EUCLIDEAN)
-            .expect("`data` should not be empty");
+        let tree =
+            BallTree::new(aview2(&data), distance::EUCLIDEAN).expect("`data` should not be empty");
         let point = [0., 0.];
-        tree.query_one(&point);
+        tree.query_nearest(&point);
     }
 
     #[test]
     fn ball_tree_3() {
         let array = array![[1., 1.], [1., 1.1], [9., 9.]];
-        let tree =
-            BallTree::with_metric(array, distance::EUCLIDEAN).expect("`array` should not be empty");
+        let tree = BallTree::new(array, distance::EUCLIDEAN).expect("`array` should not be empty");
 
         let point = [0., 0.];
-        let neighbor = tree.query_one(&point);
-        assert!(neighbor.approx_eq(&Neighbor {
-            idx: 0,
-            distance: 2f64.sqrt()
-        }));
-        let neighbors = tree.query(&point, 1);
-        assert_eq!(neighbors.len(), 1);
-        assert!(neighbors[0].approx_eq(&neighbor));
+        let neighbor = tree.query_nearest(&point);
+        assert_eq!(neighbor.0, 0);
+        assert!(approx::abs_diff_eq!(neighbor.1, 2_f64.sqrt()));
+        let (indices, distances) = tree.query(&point, 1);
+        assert_eq!(indices.len(), 1);
+        assert_eq!(distances.len(), 1);
+        assert_eq!(indices[0], neighbor.0);
+        assert!(approx::abs_diff_eq!(distances[0], neighbor.1));
         let mut neighbors = tree.query_radius(&point, 2.);
         neighbors.sort_unstable();
         assert_eq!(neighbors, &[0, 1]);
 
         let point = [1.1, 1.2];
-        let neighbor = tree.query_one(&point);
-        assert!(neighbor.approx_eq(&Neighbor {
-            idx: 1,
-            distance: (2f64 * 0.1f64 * 0.1f64).sqrt()
-        }));
-        let neighbors = tree.query(&point, 1);
-        assert_eq!(neighbors.len(), 1);
-        assert!(neighbors[0].approx_eq(&neighbor));
+        let neighbor = tree.query_nearest(&point);
+        assert_eq!(neighbor.0, 1);
+        assert!(approx::abs_diff_eq!(
+            neighbor.1,
+            (2f64 * 0.1_f64 * 0.1_f64).sqrt()
+        ));
+        let (indices, distances) = tree.query(&point, 1);
+        assert_eq!(indices.len(), 1);
+        assert_eq!(distances.len(), 1);
+        assert_eq!(indices[0], neighbor.0);
+        assert!(approx::abs_diff_eq!(distances[0], neighbor.1));
 
         let point = [7., 7.];
-        let neighbor = tree.query_one(&point);
-        assert!(neighbor.approx_eq(&Neighbor {
-            idx: 2,
-            distance: 8f64.sqrt()
-        }));
-        let neighbors = tree.query(&point, 1);
-        assert_eq!(neighbors.len(), 1);
-        assert!(neighbors[0].approx_eq(&neighbor));
+        let neighbor = tree.query_nearest(&point);
+        assert_eq!(neighbor.0, 2);
+        assert!(approx::abs_diff_eq!(neighbor.1, 8_f64.sqrt()));
+        let (indices, distances) = tree.query(&point, 1);
+        assert_eq!(indices.len(), 1);
+        assert_eq!(distances.len(), 1);
+        assert_eq!(indices[0], neighbor.0);
+        assert!(approx::abs_diff_eq!(distances[0], neighbor.1));
     }
 
     #[test]
@@ -576,15 +613,12 @@ mod test {
             [-2.0, 3.0],
             [-2.2, 3.1],
         ];
-        let tree =
-            BallTree::with_metric(array, distance::EUCLIDEAN).expect("`array` should not be empty");
+        let tree = BallTree::new(array, distance::EUCLIDEAN).expect("`array` should not be empty");
 
         let point = [1., 2.];
-        let neighbor = tree.query_one(&point);
-        assert!(neighbor.approx_eq(&Neighbor {
-            idx: 0,
-            distance: 0f64,
-        }));
+        let neighbor = tree.query_nearest(&point);
+        assert_eq!(neighbor.0, 0);
+        assert!(approx::abs_diff_eq!(neighbor.1, 0_f64.sqrt()));
     }
 
     #[test]
@@ -599,12 +633,11 @@ mod test {
             [1.0, 1.0],
             [1.0, 1.0],
         ];
-        let tree =
-            BallTree::with_metric(array, distance::EUCLIDEAN).expect("`array` should not be empty");
+        let tree = BallTree::new(array, distance::EUCLIDEAN).expect("`array` should not be empty");
 
         let point = [1., 2.];
-        let neighbor = tree.query_one(&point);
-        assert_eq!(neighbor.distance, 1f64);
+        let neighbor = tree.query_nearest(&point);
+        assert!(approx::abs_diff_eq!(neighbor.1, 1_f64.sqrt()));
     }
 
     #[test]
@@ -612,19 +645,19 @@ mod test {
         const DIMENSION: usize = 3;
 
         let array = Array::random((40, DIMENSION), Uniform::new(0., 1.));
-        let bt = BallTree::with_metric(array.view(), distance::EUCLIDEAN)
-            .expect("`array` should not be empty");
+        let bt =
+            BallTree::new(array.view(), distance::EUCLIDEAN).expect("`array` should not be empty");
         for _ in 0..10 {
             let query = Array::random(DIMENSION, Uniform::new(0., 1.));
-            let bt_neighbors = bt.query(query.as_slice().expect("should be contiguous"), 5);
+            let (_, bt_distances) = bt.query(query.as_slice().expect("should be contiguous"), 5);
             let naive_neighbors = naive_k_nearest_neighbors(
                 &array,
                 query.as_slice().expect("should be contiguous"),
                 5,
                 distance::EUCLIDEAN,
             );
-            for (n_bt, n_naive) in bt_neighbors.iter().zip(naive_neighbors.iter()) {
-                assert_eq!(n_bt.distance, n_naive.distance);
+            for (bt_dist, naive_neighbor) in bt_distances.iter().zip(naive_neighbors.iter()) {
+                assert!(approx::abs_diff_eq!(*bt_dist, naive_neighbor.distance));
             }
         }
     }
@@ -632,8 +665,7 @@ mod test {
     #[test]
     fn ball_tree_query_radius() {
         let array = array![[0.], [2.], [3.], [4.], [6.], [8.], [10.]];
-        let bt =
-            BallTree::with_metric(array, distance::EUCLIDEAN).expect("`array` should not be empty");
+        let bt = BallTree::new(array, distance::EUCLIDEAN).expect("`array` should not be empty");
 
         let neighbors = bt.query_radius(&[0.1], 1.);
         assert_eq!(neighbors, &[0]);

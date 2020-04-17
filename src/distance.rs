@@ -1,4 +1,8 @@
+//! Distance metrics.
+
+/// A distance metric for multidimensional points.
 pub trait Metric {
+    /// Calculates the distance between two points.
     fn distance<'a, 'b, P, Q>(&self, x1: P, x2: Q) -> f64
     where
         P: 'a + IntoIterator,
@@ -6,7 +10,19 @@ pub trait Metric {
         Q: 'b + IntoIterator,
         <Q as IntoIterator>::Item: Copy + Into<&'b f64>;
 
-    /// Calculates the squared euclidean distance of two points.
+    /// Calculates a value that can be used in relative comparison between two
+    /// distances. Therefore, if `distance(p1, q1)` is less than `distance(p2,
+    /// q2)`, then `reduced_distance(p1, q1)` must be less than
+    /// `reduced_distance(p2, q2)`.
+    ///
+    /// This is to provide a more efficient way of distance comparison when
+    /// absolute distance values are not necessary. For example, in the
+    /// Euclidean metric, this function may return a squared distance to avoid
+    /// the overhead of computing the square root.
+    ///
+    /// By default, this calls [`distance`].
+    ///
+    /// [`distance`]: #method.distance
     fn reduced_distance<'a, 'b, P, Q>(&self, x1: P, x2: Q) -> f64
     where
         P: 'a + IntoIterator,
@@ -15,10 +31,12 @@ pub trait Metric {
         <Q as IntoIterator>::Item: Copy + Into<&'b f64>;
 }
 
+/// The Euclidean distance metric.
 #[derive(Debug)]
 pub struct Euclidean;
 
 impl Metric for Euclidean {
+    /// Calculates the Euclidean distance between two points.
     fn distance<'a, 'b, P, Q>(&self, x1: P, x2: Q) -> f64
     where
         P: 'a + IntoIterator,
@@ -29,6 +47,7 @@ impl Metric for Euclidean {
         self.reduced_distance(x1, x2).sqrt()
     }
 
+    /// Calculates the squared Euclidean distance between two points.
     fn reduced_distance<'a, 'b, P, Q>(&self, x1: P, x2: Q) -> f64
     where
         P: 'a + IntoIterator,
@@ -45,4 +64,6 @@ impl Metric for Euclidean {
     }
 }
 
+/// An instance of the Euclidean distance metric, to be used as a function
+/// argument.
 pub const EUCLIDEAN: Euclidean = Euclidean {};
