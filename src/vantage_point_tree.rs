@@ -1,10 +1,16 @@
-pub trait Metric {
+use std::marker::PhantomData;
+use std::ops::Index;
+
+pub trait Metric<P: ?Sized> {
+    fn distance(&self, a: &P, b: &P) -> f64;
+}
+
+pub trait PointSet<P: ?Sized>: Index<usize, Output = P> {
     fn len(&self) -> usize;
+
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
-    fn distance(&self, i: usize, j: usize) -> f64;
-    fn distance_to_needle(&self, i: usize, needle: (&Self, usize)) -> f64;
 }
 
 pub struct Node {
@@ -21,26 +27,37 @@ struct DistanceIndex {
     id: usize,
 }
 
-pub struct VantagePointTree<D>
+pub struct VantagePointTree<P, S, M>
 where
-    D: Metric,
+    P: ?Sized,
+    S: PointSet<P>,
 {
-    pub data: D,
+    pub data: S,
     pub nodes: Vec<Node>,
     pub root: usize,
+    metric: M,
+    _phantom: PhantomData<P>,
 }
 
-impl<D> VantagePointTree<D>
+impl<P, S, M> VantagePointTree<P, S, M>
 where
-    D: Metric,
+    P: ?Sized,
+    S: PointSet<P>,
+    M: Metric<P>,
 {
-    pub fn new(data: D) -> Self {
+    pub fn new(data: S, metric: M) -> Self {
         let mut nodes = Vec::with_capacity(data.len());
-        let root = Self::create_root(&data, &mut nodes);
-        VantagePointTree { data, nodes, root }
+        let root = Self::create_root(&data, &metric, &mut nodes);
+        VantagePointTree {
+            data,
+            nodes,
+            root,
+            metric,
+            _phantom: PhantomData,
+        }
     }
 
-    pub fn find_nearest(&self, needle: (&D, usize)) -> (usize, f64) {
+    pub fn find_nearest(&self, needle: &P) -> (usize, f64) {
         let mut nearest = DistanceIndex {
             distance: std::f64::MAX,
             id: NULL,
@@ -49,8 +66,8 @@ where
         (nearest.id, nearest.distance)
     }
 
-    fn search_node(&self, node: &Node, needle: (&D, usize), nearest: &mut DistanceIndex) {
-        let distance = self.data.distance_to_needle(node.vantage_point, needle);
+    fn search_node(&self, node: &Node, needle: &P, nearest: &mut DistanceIndex) {
+        let distance = self.metric.distance(&self.data[node.vantage_point], needle);
 
         if distance < nearest.distance {
             nearest.distance = distance;
@@ -78,17 +95,22 @@ where
         }
     }
 
-    fn create_root(data: &D, nodes: &mut Vec<Node>) -> usize {
+    fn create_root(data: &S, metric: &M, nodes: &mut Vec<Node>) -> usize {
         let mut indexes: Vec<_> = (0..data.len())
             .map(|i| DistanceIndex {
                 distance: std::f64::MAX,
                 id: i,
             })
             .collect();
-        Self::create_node(&data, &mut indexes, nodes)
+        Self::create_node(data, metric, &mut indexes, nodes)
     }
 
-    fn create_node(data: &D, indexes: &mut [DistanceIndex], nodes: &mut Vec<Node>) -> usize {
+    fn create_node(
+        data: &S,
+        metric: &M,
+        indexes: &mut [DistanceIndex],
+        nodes: &mut Vec<Node>,
+    ) -> usize {
         if indexes.is_empty() {
             return NULL;
         }
@@ -108,7 +130,7 @@ where
         let rest = &mut indexes[..vp_pos];
 
         for r in rest.iter_mut() {
-            r.distance = data.distance(r.id, vantage_point);
+            r.distance = metric.distance(&data[r.id], &data[vantage_point]);
         }
         rest.sort_unstable_by(|a, b| a.distance.partial_cmp(&b.distance).expect("unexpected nan"));
 
@@ -124,8 +146,8 @@ where
             radius,
         });
 
-        let near = Self::create_node(&data, near, nodes);
-        let far = Self::create_node(&data, far, nodes);
+        let near = Self::create_node(data, metric, near, nodes);
+        let far = Self::create_node(data, metric, far, nodes);
         nodes[id].near = near;
         nodes[id].far = far;
         id
@@ -135,34 +157,38 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use ndarray::{array, Array, Ix2};
+    use ndarray::{array, Array2};
 
     struct Table {
-        points: Array<f64, Ix2>,
+        points: Array2<f64>,
     }
 
-    impl Metric for Table {
+    impl Index<usize> for Table {
+        type Output = [f64];
+
+        /// Returns the `i`th point.
+        ///
+        /// # Panics
+        ///
+        /// Panics if `i` is out of bound, or if the array's data is not
+        /// contiguous or not in standard order.
+        fn index(&self, i: usize) -> &Self::Output {
+            self.points.row(i).to_slice().unwrap()
+        }
+    }
+
+    impl PointSet<[f64]> for Table {
         fn len(&self) -> usize {
             self.points.nrows()
         }
+    }
 
-        fn distance(&self, i: usize, j: usize) -> f64 {
-            self.points
-                .row(i)
-                .into_iter()
-                .zip(self.points.row(j).into_iter())
-                .fold(0.0, |mut sum, (v1, v2)| {
-                    sum += (v1 - v2).powi(2);
-                    sum
-                })
-                .sqrt()
-        }
+    struct Euclidean;
 
-        fn distance_to_needle(&self, i: usize, needle: (&Self, usize)) -> f64 {
-            self.points
-                .row(i)
-                .into_iter()
-                .zip(needle.0.points.row(needle.1).into_iter())
+    impl<'a> Metric<[f64]> for Euclidean {
+        fn distance(&self, a: &[f64], b: &[f64]) -> f64 {
+            a.iter()
+                .zip(b.iter())
                 .fold(0.0, |mut sum, (v1, v2)| {
                     sum += (v1 - v2).powi(2);
                     sum
@@ -181,14 +207,8 @@ mod test {
             [-2.0, 3.0],
             [-2.2, 3.1],
         ];
-        let table = Table { points };
+        let vp = VantagePointTree::new(Table { points }, Euclidean {});
 
-        let vp = VantagePointTree::new(table);
-
-        let tester = Table {
-            points: array![[0.95, 1.96]],
-        };
-
-        assert_eq!(vp.find_nearest((&tester, 0)).0, 0);
+        assert_eq!(vp.find_nearest(&[0.95, 1.96]).0, 0);
     }
 }
