@@ -73,8 +73,7 @@ where
     /// ```
     pub fn query_nearest<'p, P>(&self, point: P) -> (usize, f64)
     where
-        P: 'p + Copy + IntoIterator,
-        <P as IntoIterator>::Item: Copy + Into<&'p f64>,
+        P: Copy + IntoIterator<Item = &'p f64>,
     {
         self.nearest_neighbor_in_subtree(point, 0, std::f64::INFINITY)
             .expect("0 is a valid index")
@@ -96,8 +95,7 @@ where
     /// ```
     pub fn query<'p, P>(&self, point: P, k: usize) -> (Vec<usize>, Vec<f64>)
     where
-        P: 'p + Copy + IntoIterator,
-        <P as IntoIterator>::Item: Copy + Into<&'p f64>,
+        P: Copy + IntoIterator<Item = &'p f64>,
     {
         let mut neighbors = BinaryHeap::with_capacity(k);
         self.nearest_k_neighbors_in_subtree(point, 0, std::f64::INFINITY, k, &mut neighbors);
@@ -123,8 +121,7 @@ where
     /// ```
     pub fn query_radius<'p, P>(&self, point: P, distance: f64) -> Vec<usize>
     where
-        P: 'p + Copy + IntoIterator,
-        <P as IntoIterator>::Item: Copy + Into<&'p f64>,
+        P: Copy + IntoIterator<Item = &'p f64>,
     {
         self.neighbors_within_radius_in_subtree(point, distance, 0)
     }
@@ -141,8 +138,7 @@ where
         radius: f64,
     ) -> Option<(usize, f64)>
     where
-        P: 'p + Copy + IntoIterator,
-        <P as IntoIterator>::Item: Copy + Into<&'p f64>,
+        P: Copy + IntoIterator<Item = &'p f64>,
     {
         let root_node = &self.nodes[root];
         let lower_bound = self.nodes[root].distance_lower_bound(point, &self.metric);
@@ -206,8 +202,7 @@ where
         k: usize,
         neighbors: &mut BinaryHeap<Neighbor>,
     ) where
-        P: 'p + Copy + IntoIterator,
-        <P as IntoIterator>::Item: Copy + Into<&'p f64>,
+        P: Copy + IntoIterator<Item = &'p f64>,
     {
         let root_node = &self.nodes[root];
         if root_node.distance_lower_bound(point, &self.metric) > radius {
@@ -262,8 +257,7 @@ where
         root: usize,
     ) -> Vec<usize>
     where
-        P: 'p + Copy + IntoIterator,
-        <P as IntoIterator>::Item: Copy + Into<&'p f64>,
+        P: Copy + IntoIterator<Item = &'p f64>,
     {
         let mut neighbors = Vec::new();
         let mut subtrees_to_visit = vec![root];
@@ -394,8 +388,7 @@ impl Node {
 
     fn distance_bounds<'p, P, M>(&self, point: P, metric: &M) -> (f64, f64)
     where
-        P: 'p + IntoIterator,
-        <P as IntoIterator>::Item: Copy + Into<&'p f64>,
+        P: IntoIterator<Item = &'p f64>,
         M: Metric,
     {
         let centroid_dist = metric.distance(point, &self.centroid);
@@ -409,8 +402,7 @@ impl Node {
 
     fn distance_lower_bound<'p, P, M>(&self, point: P, metric: &M) -> f64
     where
-        P: 'p + IntoIterator,
-        <P as IntoIterator>::Item: Copy + Into<&'p f64>,
+        P: IntoIterator<Item = &'p f64>,
         M: Metric,
     {
         let centroid_dist = metric.distance(point, &self.centroid);
