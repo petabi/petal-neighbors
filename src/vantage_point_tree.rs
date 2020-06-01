@@ -1,74 +1,99 @@
 use crate::distance::{self, Distance};
-use std::marker::PhantomData;
-use std::ops::Index;
+use crate::ArrayError;
+use ndarray::{ArrayBase, CowArray, Data, Ix2};
+use num_traits::{Float, Zero};
+use std::ops::AddAssign;
 
-pub trait PointSet<P: ?Sized>: Index<usize, Output = P> {
-    fn len(&self) -> usize;
-
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-}
-
-pub struct Node {
-    far: usize,
-    near: usize,
-    vantage_point: usize,
-    radius: f64,
-}
-
-const NULL: usize = usize::max_value();
-
-struct DistanceIndex {
-    distance: f64,
-    id: usize,
-}
-
-pub struct VantagePointTree<P, S>
+/// A data structure for nearest neighbor search in a multi-dimensional space,
+/// which is partitioned into two parts for each vantage point: those points
+/// closer to the vantage point than a threshold, and those farther.
+pub struct VantagePointTree<'a, A>
 where
-    P: ?Sized,
-    S: PointSet<P>,
+    A: Float,
 {
-    pub data: S,
-    pub nodes: Vec<Node>,
-    pub root: usize,
-    distance: Distance<f64>,
-    _phantom: PhantomData<P>,
+    points: CowArray<'a, A, Ix2>,
+    nodes: Vec<Node<A>>,
+    root: usize,
+    distance: Distance<A>,
 }
 
-impl<S> VantagePointTree<[f64], S>
+impl<'a, A> VantagePointTree<'a, A>
 where
-    S: PointSet<[f64]>,
+    A: Float + Zero + AddAssign + 'a,
 {
-    pub fn new(data: S, distance: Distance<f64>) -> Self {
-        let mut nodes = Vec::with_capacity(data.len());
-        let root = Self::create_root(&data, distance, &mut nodes);
-        VantagePointTree {
-            data,
+    /// Builds a vantage point tree using the given distance metric.
+    ///
+    /// # Errors
+    ///
+    /// * `ArrayError::Empty` if `points` is an empty array.
+    /// * `ArrayError::NotContiguous` if any row in `points` is not
+    ///   contiguous in memory.
+    pub fn new<T>(points: T, distance: Distance<A>) -> Result<Self, ArrayError>
+    where
+        T: Into<CowArray<'a, A, Ix2>>,
+    {
+        let points = points.into();
+        let n_points: usize = points.nrows();
+        if n_points == 0 {
+            return Err(ArrayError::Empty);
+        }
+        if !points.row(0).is_standard_layout() {
+            return Err(ArrayError::NotContiguous);
+        }
+
+        let mut nodes = Vec::with_capacity(n_points);
+        let root = Self::create_root(&points, distance, &mut nodes);
+        Ok(VantagePointTree {
+            points,
             nodes,
             root,
             distance,
-            _phantom: PhantomData,
-        }
+        })
     }
 
     /// Builds a vantage point tree with a euclidean distance metric.
-    pub fn euclidean<T>(points: S) -> Self {
-        Self::new(points, distance::euclidean::<f64>)
+    ///
+    /// # Errors
+    ///
+    /// * `ArrayError::Empty` if `points` is an empty array.
+    /// * `ArrayError::NotContiguous` if any row in `points` is not
+    ///   contiguous in memory.
+    pub fn euclidean<T>(points: T) -> Result<Self, ArrayError>
+    where
+        T: Into<CowArray<'a, A, Ix2>>,
+    {
+        Self::new(points, distance::euclidean::<A>)
     }
 
-    pub fn find_nearest(&self, needle: &[f64]) -> (usize, f64) {
+    /// Finds the nearest neighbor and its distance in the tree.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ndarray::array;
+    /// use petal_neighbors::{VantagePointTree, distance};
+    ///
+    /// let points = array![[1., 1.], [1., 2.], [9., 9.]];
+    /// let tree = VantagePointTree::euclidean(points).expect("valid array");
+    /// let (index, distance) = tree.query_nearest(&[8., 8.]);
+    /// assert_eq!(index, 2);  // points[2] is the nearest.
+    /// assert!((2_f64.sqrt() - distance).abs() < 1e-8);
+    /// ```
+    pub fn query_nearest(&self, needle: &[A]) -> (usize, A) {
         let mut nearest = DistanceIndex {
-            distance: std::f64::MAX,
+            distance: A::max_value(),
             id: NULL,
         };
         self.search_node(&self.nodes[self.root], needle, &mut nearest);
         (nearest.id, nearest.distance)
     }
 
-    fn search_node(&self, node: &Node, needle: &[f64], nearest: &mut DistanceIndex) {
+    fn search_node(&self, node: &Node<A>, needle: &[A], nearest: &mut DistanceIndex<A>) {
         let distance = self.distance;
-        let distance = distance(&self.data[node.vantage_point], needle);
+        let distance = distance(
+            self.points.row(node.vantage_point).as_slice().unwrap(),
+            needle,
+        );
 
         if distance < nearest.distance {
             nearest.distance = distance;
@@ -96,22 +121,32 @@ where
         }
     }
 
-    fn create_root(data: &S, distance: Distance<f64>, nodes: &mut Vec<Node>) -> usize {
-        let mut indexes: Vec<_> = (0..data.len())
+    fn create_root<S>(
+        points: &ArrayBase<S, Ix2>,
+        distance: Distance<A>,
+        nodes: &mut Vec<Node<A>>,
+    ) -> usize
+    where
+        S: Data<Elem = A>,
+    {
+        let mut indexes: Vec<_> = (0..points.nrows())
             .map(|i| DistanceIndex {
-                distance: std::f64::MAX,
+                distance: A::max_value(),
                 id: i,
             })
             .collect();
-        Self::create_node(data, distance, &mut indexes, nodes)
+        Self::create_node(points, distance, &mut indexes, nodes)
     }
 
-    fn create_node(
-        data: &S,
-        distance: Distance<f64>,
-        indexes: &mut [DistanceIndex],
-        nodes: &mut Vec<Node>,
-    ) -> usize {
+    fn create_node<S>(
+        points: &ArrayBase<S, Ix2>,
+        distance: Distance<A>,
+        indexes: &mut [DistanceIndex<A>],
+        nodes: &mut Vec<Node<A>>,
+    ) -> usize
+    where
+        S: Data<Elem = A>,
+    {
         if indexes.is_empty() {
             return NULL;
         }
@@ -121,7 +156,7 @@ where
                 near: NULL,
                 far: NULL,
                 vantage_point: indexes[0].id,
-                radius: std::f64::MAX,
+                radius: A::max_value(),
             });
             return id;
         }
@@ -131,7 +166,10 @@ where
         let rest = &mut indexes[..vp_pos];
 
         for r in rest.iter_mut() {
-            r.distance = distance(&data[r.id], &data[vantage_point]);
+            r.distance = distance(
+                points.row(r.id).as_slice().unwrap(),
+                points.row(vantage_point).as_slice().unwrap(),
+            );
         }
         rest.sort_unstable_by(|a, b| a.distance.partial_cmp(&b.distance).expect("unexpected nan"));
 
@@ -147,42 +185,32 @@ where
             radius,
         });
 
-        let near = Self::create_node(data, distance, near, nodes);
-        let far = Self::create_node(data, distance, far, nodes);
+        let near = Self::create_node(points, distance, near, nodes);
+        let far = Self::create_node(points, distance, far, nodes);
         nodes[id].near = near;
         nodes[id].far = far;
         id
     }
 }
 
+struct Node<A> {
+    far: usize,
+    near: usize,
+    vantage_point: usize,
+    radius: A,
+}
+
+const NULL: usize = usize::max_value();
+
+struct DistanceIndex<A> {
+    distance: A,
+    id: usize,
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use ndarray::{array, Array2};
-
-    struct Table {
-        points: Array2<f64>,
-    }
-
-    impl Index<usize> for Table {
-        type Output = [f64];
-
-        /// Returns the `i`th point.
-        ///
-        /// # Panics
-        ///
-        /// Panics if `i` is out of bound, or if the array's data is not
-        /// contiguous or not in standard order.
-        fn index(&self, i: usize) -> &Self::Output {
-            self.points.row(i).to_slice().unwrap()
-        }
-    }
-
-    impl PointSet<[f64]> for Table {
-        fn len(&self) -> usize {
-            self.points.nrows()
-        }
-    }
+    use ndarray::array;
 
     #[test]
     fn euclidian() {
@@ -194,8 +222,8 @@ mod test {
             [-2.0, 3.0],
             [-2.2, 3.1],
         ];
-        let vp = VantagePointTree::euclidean::<f64>(Table { points });
+        let vp = VantagePointTree::euclidean(points).expect("valid array");
 
-        assert_eq!(vp.find_nearest(&[0.95, 1.96]).0, 0);
+        assert_eq!(vp.query_nearest(&[0.95, 1.96]).0, 0);
     }
 }

@@ -1,4 +1,5 @@
 use crate::distance::{self, Distance};
+use crate::ArrayError;
 use ndarray::{ArrayBase, ArrayView1, CowArray, Data, Ix2};
 use num_traits::{Float, FromPrimitive, Zero};
 use std::cmp;
@@ -6,9 +7,9 @@ use std::collections::BinaryHeap;
 use std::convert::TryFrom;
 use std::mem::size_of;
 use std::ops::{AddAssign, DivAssign, Range};
-use thiserror::Error;
 
-/// A data structure for nearest neighbor search in a multi-dimensional space.
+/// A data structure for nearest neighbor search in a multi-dimensional space,
+/// which is partitioned into a nested set of hyperspheres, or "balls".
 pub struct BallTree<'a, A>
 where
     A: Float,
@@ -28,24 +29,24 @@ where
     ///
     /// # Errors
     ///
-    /// * `InvalidArray::Empty` if `points` is an empty array.
-    /// * `InvalidArray::NotContiguous` if any row in `points` is not
+    /// * `ArrayError::Empty` if `points` is an empty array.
+    /// * `ArrayError::NotContiguous` if any row in `points` is not
     ///   contiguous in memory.
     pub fn new<T>(
         points: T,
         distance: Distance<A>,
         reduced_distance: Option<Distance<A>>,
-    ) -> Result<Self, InvalidArray>
+    ) -> Result<Self, ArrayError>
     where
         T: Into<CowArray<'a, A, Ix2>>,
     {
         let points = points.into();
         let n_points: usize = points.nrows();
         if n_points == 0 {
-            return Err(InvalidArray::Empty);
+            return Err(ArrayError::Empty);
         }
         if !points.row(0).is_standard_layout() {
-            return Err(InvalidArray::NotContiguous);
+            return Err(ArrayError::NotContiguous);
         }
 
         let height = u32::try_from(size_of::<usize>() * 8).expect("smaller than u32::max_value()")
@@ -77,8 +78,10 @@ where
     ///
     /// # Errors
     ///
-    /// Returns an error if `points` is an empty array.
-    pub fn euclidean<T>(points: T) -> Result<Self, InvalidArray>
+    /// * `ArrayError::Empty` if `points` is an empty array.
+    /// * `ArrayError::NotContiguous` if any row in `points` is not
+    ///   contiguous in memory.
+    pub fn euclidean<T>(points: T) -> Result<Self, ArrayError>
     where
         T: Into<CowArray<'a, A, Ix2>>,
     {
@@ -98,7 +101,7 @@ where
     /// use petal_neighbors::{BallTree, distance};
     ///
     /// let points = array![[1., 1.], [1., 2.], [9., 9.]];
-    /// let tree = BallTree::euclidean(points).expect("non-empty input");
+    /// let tree = BallTree::euclidean(points).expect("valid array");
     /// let (index, distance) = tree.query_nearest(&[8., 8.]);
     /// assert_eq!(index, 2);  // points[2] is the nearest.
     /// assert!((2_f64.sqrt() - distance).abs() < 1e-8);
@@ -328,14 +331,6 @@ where
 }
 
 /// An error returned when an array is not suitable to build a `BallTree`.
-#[derive(Debug, Error)]
-pub enum InvalidArray {
-    #[error("array is empty")]
-    Empty,
-    #[error("array is not contiguous in memory")]
-    NotContiguous,
-}
-
 #[derive(Clone, Debug)]
 struct Neighbor<A>
 where
