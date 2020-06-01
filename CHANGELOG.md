@@ -9,7 +9,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Add vantage point tree data structure to find nearest points.
+- A vantage point tree data structure to find nearest points.
+- `BallTree` accepts not only an `f64` array but also an `f32`one.
+- `BallTree::euclidean` to create a ball tree withoug having to pass a distance
+  metric as an argument.
+
+### Changed
+
+- The codinates of each point must be stored in a contiguous area in memory.
+- A distance metric is now a function, not a trait.
 
 ## [0.3.0] - 2020-04-17
 
