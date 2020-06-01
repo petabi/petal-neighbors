@@ -1,11 +1,13 @@
 [package]
 name = "petal-neighbors"
-version = "0.3.0"
-description = "A ball tree data structure for nearest neighbor search."
+version = "0.4.0"
+description = "Nearest neighbor search algorithms including a ball tree and a vantage point tree."
 readme = "README.md"
 homepage = "https://github.com/petabi/petal-neighbors"
 repository = "https://github.com/petabi/petal-neighbors"
 license = "Apache-2.0"
+keywords = ["nearest-neighbor", "knn", "ball-tree", "vantage-point"]
+categories = ["algorithms", "data-structures"]
 authors = [
     "Min Kim <msk@dolbo.net>",
     "Min Shao <min.shao1988@gmail.com>"

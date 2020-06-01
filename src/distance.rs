@@ -3,8 +3,12 @@
 use num_traits::{Float, Zero};
 use std::ops::AddAssign;
 
+/// The type of a distance metric function.
 pub type Distance<A> = fn(&[A], &[A]) -> A;
 
+/// Euclidean distance before taking a squre root. Used as a lightweight version
+/// of [`euclidean`] for relative comparisions.
+/// [`euclidean`]: #method.euclidean
 pub fn euclidean_reduced<A>(x1: &[A], x2: &[A]) -> A
 where
     A: Float + Zero + AddAssign,
@@ -18,6 +22,7 @@ where
         })
 }
 
+/// Euclidean distance metric.
 pub fn euclidean<A>(x1: &[A], x2: &[A]) -> A
 where
     A: Float + Zero + AddAssign,

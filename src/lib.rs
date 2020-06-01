@@ -6,6 +6,7 @@ pub use ball_tree::BallTree;
 use thiserror::Error;
 pub use vantage_point_tree::VantagePointTree;
 
+/// The error type for input arrays.
 #[derive(Debug, Error)]
 pub enum ArrayError {
     #[error("array is empty")]
