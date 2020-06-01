@@ -1,9 +1,6 @@
+use crate::distance::{self, Distance};
 use std::marker::PhantomData;
 use std::ops::Index;
-
-pub trait Metric<P: ?Sized> {
-    fn distance(&self, a: &P, b: &P) -> f64;
-}
 
 pub trait PointSet<P: ?Sized>: Index<usize, Output = P> {
     fn len(&self) -> usize;
@@ -27,7 +24,7 @@ struct DistanceIndex {
     id: usize,
 }
 
-pub struct VantagePointTree<P, S, M>
+pub struct VantagePointTree<P, S>
 where
     P: ?Sized,
     S: PointSet<P>,
@@ -35,29 +32,32 @@ where
     pub data: S,
     pub nodes: Vec<Node>,
     pub root: usize,
-    metric: M,
+    distance: Distance<f64>,
     _phantom: PhantomData<P>,
 }
 
-impl<P, S, M> VantagePointTree<P, S, M>
+impl<S> VantagePointTree<[f64], S>
 where
-    P: ?Sized,
-    S: PointSet<P>,
-    M: Metric<P>,
+    S: PointSet<[f64]>,
 {
-    pub fn new(data: S, metric: M) -> Self {
+    pub fn new(data: S, distance: Distance<f64>) -> Self {
         let mut nodes = Vec::with_capacity(data.len());
-        let root = Self::create_root(&data, &metric, &mut nodes);
+        let root = Self::create_root(&data, distance, &mut nodes);
         VantagePointTree {
             data,
             nodes,
             root,
-            metric,
+            distance,
             _phantom: PhantomData,
         }
     }
 
-    pub fn find_nearest(&self, needle: &P) -> (usize, f64) {
+    /// Builds a vantage point tree with a euclidean distance metric.
+    pub fn euclidean<T>(points: S) -> Self {
+        Self::new(points, distance::euclidean::<f64>)
+    }
+
+    pub fn find_nearest(&self, needle: &[f64]) -> (usize, f64) {
         let mut nearest = DistanceIndex {
             distance: std::f64::MAX,
             id: NULL,
@@ -66,8 +66,9 @@ where
         (nearest.id, nearest.distance)
     }
 
-    fn search_node(&self, node: &Node, needle: &P, nearest: &mut DistanceIndex) {
-        let distance = self.metric.distance(&self.data[node.vantage_point], needle);
+    fn search_node(&self, node: &Node, needle: &[f64], nearest: &mut DistanceIndex) {
+        let distance = self.distance;
+        let distance = distance(&self.data[node.vantage_point], needle);
 
         if distance < nearest.distance {
             nearest.distance = distance;
@@ -95,19 +96,19 @@ where
         }
     }
 
-    fn create_root(data: &S, metric: &M, nodes: &mut Vec<Node>) -> usize {
+    fn create_root(data: &S, distance: Distance<f64>, nodes: &mut Vec<Node>) -> usize {
         let mut indexes: Vec<_> = (0..data.len())
             .map(|i| DistanceIndex {
                 distance: std::f64::MAX,
                 id: i,
             })
             .collect();
-        Self::create_node(data, metric, &mut indexes, nodes)
+        Self::create_node(data, distance, &mut indexes, nodes)
     }
 
     fn create_node(
         data: &S,
-        metric: &M,
+        distance: Distance<f64>,
         indexes: &mut [DistanceIndex],
         nodes: &mut Vec<Node>,
     ) -> usize {
@@ -130,7 +131,7 @@ where
         let rest = &mut indexes[..vp_pos];
 
         for r in rest.iter_mut() {
-            r.distance = metric.distance(&data[r.id], &data[vantage_point]);
+            r.distance = distance(&data[r.id], &data[vantage_point]);
         }
         rest.sort_unstable_by(|a, b| a.distance.partial_cmp(&b.distance).expect("unexpected nan"));
 
@@ -146,8 +147,8 @@ where
             radius,
         });
 
-        let near = Self::create_node(data, metric, near, nodes);
-        let far = Self::create_node(data, metric, far, nodes);
+        let near = Self::create_node(data, distance, near, nodes);
+        let far = Self::create_node(data, distance, far, nodes);
         nodes[id].near = near;
         nodes[id].far = far;
         id
@@ -183,20 +184,6 @@ mod test {
         }
     }
 
-    struct Euclidean;
-
-    impl<'a> Metric<[f64]> for Euclidean {
-        fn distance(&self, a: &[f64], b: &[f64]) -> f64 {
-            a.iter()
-                .zip(b.iter())
-                .fold(0.0, |mut sum, (v1, v2)| {
-                    sum += (v1 - v2).powi(2);
-                    sum
-                })
-                .sqrt()
-        }
-    }
-
     #[test]
     fn euclidian() {
         let points = array![
@@ -207,7 +194,7 @@ mod test {
             [-2.0, 3.0],
             [-2.2, 3.1],
         ];
-        let vp = VantagePointTree::new(Table { points }, Euclidean {});
+        let vp = VantagePointTree::euclidean::<f64>(Table { points });
 
         assert_eq!(vp.find_nearest(&[0.95, 1.96]).0, 0);
     }

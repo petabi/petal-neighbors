@@ -1,7 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use ndarray::ArrayView;
 use ndarray_rand::rand::{rngs::StdRng, Rng, SeedableRng};
-use petal_neighbors::{distance, BallTree};
+use petal_neighbors::BallTree;
 
 fn build(c: &mut Criterion) {
     let n = black_box(128);
@@ -12,12 +12,7 @@ fn build(c: &mut Criterion) {
     let array = ArrayView::from_shape((n, dim), &data).unwrap();
     c.bench_function("build", |b| {
         b.iter(|| {
-            BallTree::new(
-                array,
-                distance::euclidean_distance,
-                Some(distance::euclidean_reduced_distance),
-            )
-            .expect("`array` is not empty");
+            BallTree::euclidean(array).expect("`array` is not empty");
         })
     });
 }
@@ -29,12 +24,7 @@ fn query_radius(c: &mut Criterion) {
     let mut rng = StdRng::from_seed(*b"ball tree query_radius test seed");
     let data: Vec<f64> = (0..n * dim).map(|_| rng.gen()).collect();
     let array = ArrayView::from_shape((n, dim), &data).unwrap();
-    let tree = BallTree::new(
-        array,
-        distance::euclidean_distance,
-        Some(distance::euclidean_reduced_distance),
-    )
-    .expect("`array` is not empty");
+    let tree = BallTree::euclidean(array).expect("`array` is not empty");
     c.bench_function("query_radius", |b| {
         b.iter(|| {
             for i in 0..n {
