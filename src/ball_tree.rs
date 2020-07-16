@@ -448,6 +448,7 @@ impl<A> Default for Node<A>
 where
     A: Float + Zero,
 {
+    #[allow(clippy::reversed_empty_ranges)] // An empty range is valid because `centroid` is empty.
     fn default() -> Self {
         Self {
             range: (0..0),
