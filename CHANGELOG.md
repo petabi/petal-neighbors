@@ -11,6 +11,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `BallTree` and `VantagePointTree` accept an ndarray as a point.
 
+### Fixed
+
+- No longer panics when a coordinate is NaN; the distance from a point with
+  `NaN` in its coordinate and another point is considered greater than the
+  distance between any two points without `NaN` in their coordinates.
+
 ## [0.4.0] - 2020-06-01
 
 ### Added
