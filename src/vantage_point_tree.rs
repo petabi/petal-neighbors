@@ -1,6 +1,6 @@
 use crate::distance::{self, Distance};
 use crate::ArrayError;
-use ndarray::{ArrayBase, CowArray, Data, Ix2};
+use ndarray::{ArrayBase, ArrayView1, CowArray, Data, Ix1, Ix2};
 use num_traits::{Float, Zero};
 use std::ops::AddAssign;
 
@@ -70,30 +70,30 @@ where
     /// # Examples
     ///
     /// ```
-    /// use ndarray::array;
+    /// use ndarray::{array, aview1};
     /// use petal_neighbors::{VantagePointTree, distance};
     ///
     /// let points = array![[1., 1.], [1., 2.], [9., 9.]];
     /// let tree = VantagePointTree::euclidean(points).expect("valid array");
-    /// let (index, distance) = tree.query_nearest(&[8., 8.]);
+    /// let (index, distance) = tree.query_nearest(&aview1(&[8., 8.]));
     /// assert_eq!(index, 2);  // points[2] is the nearest.
     /// assert!((2_f64.sqrt() - distance).abs() < 1e-8);
     /// ```
-    pub fn query_nearest(&self, needle: &[A]) -> (usize, A) {
+    pub fn query_nearest<S>(&self, needle: &ArrayBase<S, Ix1>) -> (usize, A)
+    where
+        S: Data<Elem = A>,
+    {
         let mut nearest = DistanceIndex {
             distance: A::max_value(),
             id: NULL,
         };
-        self.search_node(&self.nodes[self.root], needle, &mut nearest);
+        self.search_node(&self.nodes[self.root], &needle.view(), &mut nearest);
         (nearest.id, nearest.distance)
     }
 
-    fn search_node(&self, node: &Node<A>, needle: &[A], nearest: &mut DistanceIndex<A>) {
+    fn search_node(&self, node: &Node<A>, needle: &ArrayView1<A>, nearest: &mut DistanceIndex<A>) {
         let distance = self.distance;
-        let distance = distance(
-            self.points.row(node.vantage_point).as_slice().unwrap(),
-            needle,
-        );
+        let distance = distance(&self.points.row(node.vantage_point), needle);
 
         if distance < nearest.distance {
             nearest.distance = distance;
@@ -166,10 +166,7 @@ where
         let rest = &mut indexes[..vp_pos];
 
         for r in rest.iter_mut() {
-            r.distance = distance(
-                points.row(r.id).as_slice().unwrap(),
-                points.row(vantage_point).as_slice().unwrap(),
-            );
+            r.distance = distance(&points.row(r.id), &points.row(vantage_point));
         }
         rest.sort_unstable_by(|a, b| a.distance.partial_cmp(&b.distance).expect("unexpected nan"));
 
@@ -210,7 +207,7 @@ struct DistanceIndex<A> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use ndarray::array;
+    use ndarray::{array, aview1};
 
     #[test]
     fn euclidian() {
@@ -224,6 +221,6 @@ mod test {
         ];
         let vp = VantagePointTree::euclidean(points).expect("valid array");
 
-        assert_eq!(vp.query_nearest(&[0.95, 1.96]).0, 0);
+        assert_eq!(vp.query_nearest(&aview1(&[0.95, 1.96])).0, 0);
     }
 }

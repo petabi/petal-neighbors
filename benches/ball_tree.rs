@@ -29,7 +29,7 @@ fn query_radius(c: &mut Criterion) {
         b.iter(|| {
             for i in 0..n {
                 let query = &data[i * dim..i * dim + dim];
-                tree.query_radius(query, 0.2);
+                tree.query_radius(&query.into(), 0.2);
             }
         })
     });
