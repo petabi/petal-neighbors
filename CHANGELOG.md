@@ -16,6 +16,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - No longer panics when a coordinate is NaN; the distance from a point with
   `NaN` in its coordinate and another point is considered greater than the
   distance between any two points without `NaN` in their coordinates.
+- `BallTree::query` returns empty vectors, rather than panics, when `k` is zero.
 
 ## [0.4.0] - 2020-06-01
 
