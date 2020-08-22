@@ -2,6 +2,7 @@ use crate::distance::{self, Distance};
 use crate::ArrayError;
 use ndarray::{ArrayBase, ArrayView1, CowArray, Data, Ix1, Ix2};
 use num_traits::{Float, Zero};
+use ordered_float::OrderedFloat;
 use std::ops::AddAssign;
 
 /// A data structure for nearest neighbor search in a multi-dimensional space,
@@ -84,28 +85,28 @@ where
         S: Data<Elem = A>,
     {
         let mut nearest = DistanceIndex {
-            distance: A::max_value(),
+            distance: A::max_value().into(),
             id: NULL,
         };
         self.search_node(&self.nodes[self.root], &needle.view(), &mut nearest);
-        (nearest.id, nearest.distance)
+        (nearest.id, nearest.distance.into_inner())
     }
 
     fn search_node(&self, node: &Node<A>, needle: &ArrayView1<A>, nearest: &mut DistanceIndex<A>) {
         let distance = self.distance;
-        let distance = distance(&self.points.row(node.vantage_point), needle);
+        let distance = distance(&self.points.row(node.vantage_point), needle).into();
 
         if distance < nearest.distance {
             nearest.distance = distance;
             nearest.id = node.vantage_point;
         }
 
-        if distance < node.radius {
+        if distance < node.radius.into() {
             if let Some(near) = self.nodes.get(node.near) {
                 self.search_node(near, needle, nearest);
             }
             if let Some(far) = self.nodes.get(node.far) {
-                if node.radius < distance + nearest.distance {
+                if distance + nearest.distance > node.radius.into() {
                     self.search_node(far, needle, nearest);
                 }
             }
@@ -114,7 +115,7 @@ where
                 self.search_node(far, needle, nearest);
             }
             if let Some(near) = self.nodes.get(node.near) {
-                if node.radius + nearest.distance > distance {
+                if nearest.distance + node.radius.into() > distance {
                     self.search_node(near, needle, nearest);
                 }
             }
@@ -131,7 +132,7 @@ where
     {
         let mut indexes: Vec<_> = (0..points.nrows())
             .map(|i| DistanceIndex {
-                distance: A::max_value(),
+                distance: A::max_value().into(),
                 id: i,
             })
             .collect();
@@ -166,9 +167,9 @@ where
         let rest = &mut indexes[..vp_pos];
 
         for r in rest.iter_mut() {
-            r.distance = distance(&points.row(r.id), &points.row(vantage_point));
+            r.distance = distance(&points.row(r.id), &points.row(vantage_point)).into();
         }
-        rest.sort_unstable_by(|a, b| a.distance.partial_cmp(&b.distance).expect("unexpected nan"));
+        rest.sort_unstable_by(|a, b| a.distance.cmp(&b.distance));
 
         let half = rest.len() / 2;
         let (near, far) = rest.split_at_mut(half);
@@ -179,7 +180,7 @@ where
             far: NULL,
             near: NULL,
             vantage_point,
-            radius,
+            radius: radius.into_inner(),
         });
 
         let near = Self::create_node(points, distance, near, nodes);
@@ -200,7 +201,7 @@ struct Node<A> {
 const NULL: usize = usize::max_value();
 
 struct DistanceIndex<A> {
-    distance: A,
+    distance: OrderedFloat<A>,
     id: usize,
 }
 

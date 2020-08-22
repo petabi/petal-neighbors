@@ -2,6 +2,7 @@ use crate::distance::{self, Distance};
 use crate::ArrayError;
 use ndarray::{Array1, ArrayBase, ArrayView1, CowArray, Data, Ix1, Ix2};
 use num_traits::{Float, FromPrimitive, Zero};
+use ordered_float::OrderedFloat;
 use std::cmp;
 use std::collections::BinaryHeap;
 use std::convert::TryFrom;
@@ -136,7 +137,7 @@ where
         self.nearest_k_neighbors_in_subtree(&point.view(), 0, A::infinity(), k, &mut neighbors);
         let sorted = neighbors.into_sorted_vec();
         let indices = sorted.iter().map(|v| v.idx).collect();
-        let distances = sorted.iter().map(|v| v.distance).collect();
+        let distances = sorted.iter().map(|v| v.distance.into_inner()).collect();
         (indices, distances)
     }
 
@@ -337,7 +338,7 @@ where
     A: Float,
 {
     pub idx: usize,
-    pub distance: A,
+    pub distance: OrderedFloat<A>,
 }
 
 impl<A> Neighbor<A>
@@ -346,7 +347,10 @@ where
 {
     #[must_use]
     pub fn new(idx: usize, distance: A) -> Self {
-        Self { idx, distance }
+        Self {
+            idx,
+            distance: distance.into(),
+        }
     }
 }
 
@@ -356,7 +360,7 @@ where
 {
     #[must_use]
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+        self.distance.cmp(&other.distance)
     }
 }
 
@@ -715,7 +719,10 @@ mod test {
             let naive_neighbors =
                 naive_k_nearest_neighbors(&array, &query.view(), 5, distance::euclidean);
             for (bt_dist, naive_neighbor) in bt_distances.iter().zip(naive_neighbors.iter()) {
-                assert!(approx::abs_diff_eq!(*bt_dist, naive_neighbor.distance));
+                assert!(approx::abs_diff_eq!(
+                    *bt_dist,
+                    naive_neighbor.distance.into_inner()
+                ));
             }
         }
     }
@@ -843,7 +850,7 @@ mod test {
             .enumerate()
             .map(|(i, n)| Neighbor {
                 idx: i,
-                distance: distance(&n, point),
+                distance: distance(&n, point).into(),
             })
             .collect::<Vec<Neighbor<A>>>();
         knn.sort();
