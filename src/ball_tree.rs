@@ -7,6 +7,7 @@ use std::cmp;
 use std::collections::BinaryHeap;
 use std::convert::TryFrom;
 use std::mem::size_of;
+use std::num::NonZeroUsize;
 use std::ops::{AddAssign, DivAssign, Range};
 
 /// A data structure for nearest neighbor search in a multi-dimensional space,
@@ -133,7 +134,12 @@ where
     where
         S: Data<Elem = A>,
     {
-        let mut neighbors = BinaryHeap::with_capacity(k);
+        let k = if let Some(k) = NonZeroUsize::new(k) {
+            k
+        } else {
+            return (Vec::new(), Vec::new());
+        };
+        let mut neighbors = BinaryHeap::with_capacity(k.get());
         self.nearest_k_neighbors_in_subtree(&point.view(), 0, A::infinity(), k, &mut neighbors);
         let sorted = neighbors.into_sorted_vec();
         let indices = sorted.iter().map(|v| v.idx).collect();
@@ -233,7 +239,7 @@ where
         point: &ArrayView1<A>,
         root: usize,
         radius: A,
-        k: usize,
+        k: NonZeroUsize,
         neighbors: &mut BinaryHeap<Neighbor<A>>,
     ) {
         let root_node = &self.nodes[root];
@@ -255,9 +261,9 @@ where
                     }
                 })
                 .fold(neighbors, |neighbors, n| {
-                    if neighbors.len() < k {
+                    if neighbors.len() < k.get() {
                         neighbors.push(n);
-                    } else if n < *neighbors.peek().unwrap() {
+                    } else if n < *neighbors.peek().expect("not empty") {
                         neighbors.pop();
                         neighbors.push(n);
                     }
@@ -626,6 +632,9 @@ mod test {
         let neighbor = tree.query_nearest(&point);
         assert_eq!(neighbor.0, 0);
         assert!(approx::abs_diff_eq!(neighbor.1, 2_f64.sqrt()));
+        let (indices, distances) = tree.query(&point, 0);
+        assert!(indices.is_empty());
+        assert!(distances.is_empty());
         let (indices, distances) = tree.query(&point, 1);
         assert_eq!(indices.len(), 1);
         assert_eq!(distances.len(), 1);
