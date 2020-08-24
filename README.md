@@ -11,12 +11,12 @@ Nearest neighbor search algorithms including a ball tree and a vantage point tre
 The following example shows how to find two nearest neighbors in a ball tree.
 
 ```rust
-use ndarray::array;
+use ndarray::{array, aview1};
 use petal_neighbors::{BallTree, distance};
 
 let points = array![[1., 1.], [1., 2.], [9., 9.]];
 let tree = BallTree::euclidean(points).unwrap();
-let (indices, distances) = tree.query(&[3., 3.], 2);
+let (indices, distances) = tree.query(&aview1(&[3., 3.]), 2);
 assert_eq!(indices, &[1, 0]);  // points[1] is the nearest, points[0] the next.
 ```
 
