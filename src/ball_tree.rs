@@ -215,15 +215,9 @@ where
                 (child2, child1)
             };
             match self.nearest_neighbor_in_subtree(point, child1, radius) {
-                Some(neighbor1) => {
-                    if let Some(neighbor2) =
-                        self.nearest_neighbor_in_subtree(point, child2, neighbor1.1)
-                    {
-                        Some(neighbor2)
-                    } else {
-                        Some(neighbor1)
-                    }
-                }
+                Some(neighbor) => self
+                    .nearest_neighbor_in_subtree(point, child2, neighbor.1)
+                    .map_or(Some(neighbor), Some),
                 None => self.nearest_neighbor_in_subtree(point, child2, radius),
             }
         }
