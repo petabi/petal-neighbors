@@ -115,7 +115,7 @@ where
                 self.search_node(far, needle, nearest);
             }
             if let Some(near) = self.nodes.get(node.near) {
-                if nearest.distance + node.radius.into() > distance {
+                if distance - nearest.distance < node.radius.into() {
                     self.search_node(near, needle, nearest);
                 }
             }
