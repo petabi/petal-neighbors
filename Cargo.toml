@@ -1,6 +1,6 @@
 [package]
 name = "petal-neighbors"
-version = "0.5.1"
+version = "0.5.2"
 description = "Nearest neighbor search algorithms including a ball tree and a vantage point tree."
 readme = "README.md"
 documentation = "https://docs.rs/petal-neighbors"
