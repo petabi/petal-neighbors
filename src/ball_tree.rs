@@ -560,7 +560,7 @@ where
     S: Data<Elem = A>,
 {
     let mut spread_iter = matrix
-        .gencolumns()
+        .columns()
         .into_iter()
         .map(|col| {
             let (min, max) = idx
