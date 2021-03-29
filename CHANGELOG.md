@@ -5,6 +5,13 @@ file is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Upgrade ndarray to 0.15.0
+- Requires Rust 1.49 or later.
+
 ## [0.5.2] - 2021-02-16
 
 ### Changed
@@ -69,6 +76,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - A ball tree data structure to find nearest neighbors.
 
+[Unreleased]: https://github.com/petabi/petal-neighbors/compare/0.5.2...master
 [0.5.2]: https://github.com/petabi/petal-neighbors/compare/0.5.0...0.5.2
 [0.5.1]: https://github.com/petabi/petal-neighbors/compare/0.5.0...0.5.1
 [0.5.0]: https://github.com/petabi/petal-neighbors/compare/0.4.0...0.5.0
