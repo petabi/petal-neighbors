@@ -306,7 +306,7 @@ where
 
             if ub <= radius {
                 neighbors.reserve(root_node.range.end - root_node.range.start);
-                neighbors.extend(self.idx[root_node.range.clone()].iter().cloned());
+                neighbors.extend(self.idx[root_node.range.clone()].iter().copied());
             } else if root_node.is_leaf {
                 neighbors.extend(self.idx[root_node.range.clone()].iter().filter_map(|&i| {
                     let distance = self.distance;
