@@ -19,8 +19,7 @@ where
     points: CowArray<'a, A, Ix2>,
     idx: Vec<usize>,
     nodes: Vec<Node<A>>,
-    distance: Distance<A>,
-    _reduced_distance: Distance<A>,
+    distance: Box<dyn Distance<A>>,
 }
 
 impl<'a, A> BallTree<'a, A>
@@ -34,11 +33,7 @@ where
     /// * `ArrayError::Empty` if `points` is an empty array.
     /// * `ArrayError::NotContiguous` if any row in `points` is not
     ///   contiguous in memory.
-    pub fn new<T>(
-        points: T,
-        distance: Distance<A>,
-        reduced_distance: Option<Distance<A>>,
-    ) -> Result<Self, ArrayError>
+    pub fn new<T>(points: T, distance: Box<dyn Distance<A>>) -> Result<Self, ArrayError>
     where
         T: Into<CowArray<'a, A, Ix2>>,
     {
@@ -57,22 +52,19 @@ where
 
         let mut idx: Vec<usize> = (0..n_points).collect();
         let mut nodes = vec![Node::default(); size];
-        let reduced_distance = reduced_distance.unwrap_or(distance);
         build_subtree(
             &mut nodes,
             &mut idx,
             &points,
             0,
             0..n_points,
-            distance,
-            reduced_distance,
+            distance.as_ref(),
         );
         Ok(BallTree {
             points,
             idx,
             nodes,
             distance,
-            _reduced_distance: reduced_distance,
         })
     }
 
@@ -87,11 +79,7 @@ where
     where
         T: Into<CowArray<'a, A, Ix2>>,
     {
-        Self::new(
-            points,
-            distance::euclidean,
-            Some(distance::euclidean_reduced),
-        )
+        Self::new(points, Box::new(distance::Euclidean::default()))
     }
 
     /// Finds the nearest neighbor and its distance in the tree.
@@ -180,7 +168,7 @@ where
         radius: A,
     ) -> Option<(usize, A)> {
         let root_node = &self.nodes[root];
-        let lower_bound = self.nodes[root].distance_lower_bound(point, self.distance);
+        let lower_bound = self.nodes[root].distance_lower_bound(point, self.distance.as_ref());
         if lower_bound > radius {
             return None;
         }
@@ -189,8 +177,7 @@ where
             let (min_i, min_dist) = self.idx[root_node.range.clone()].iter().fold(
                 (0, A::infinity()),
                 |(min_i, min_dist), &i| {
-                    let distance = self.distance;
-                    let dist = distance(point, &self.points.row(i));
+                    let dist = self.distance.get(point, &self.points.row(i));
 
                     if dist < min_dist {
                         (i, dist)
@@ -207,8 +194,8 @@ where
         } else {
             let child1 = root * 2 + 1;
             let child2 = child1 + 1;
-            let lb1 = self.nodes[child1].distance_lower_bound(point, self.distance);
-            let lb2 = self.nodes[child2].distance_lower_bound(point, self.distance);
+            let lb1 = self.nodes[child1].distance_lower_bound(point, self.distance.as_ref());
+            let lb2 = self.nodes[child2].distance_lower_bound(point, self.distance.as_ref());
             let (child1, child2) = if lb1 < lb2 {
                 (child1, child2)
             } else {
@@ -237,7 +224,7 @@ where
         neighbors: &mut BinaryHeap<Neighbor<A>>,
     ) {
         let root_node = &self.nodes[root];
-        if root_node.distance_lower_bound(point, self.distance) > radius {
+        if root_node.distance_lower_bound(point, self.distance.as_ref()) > radius {
             return;
         }
 
@@ -245,8 +232,7 @@ where
             self.idx[root_node.range.clone()]
                 .iter()
                 .filter_map(|&i| {
-                    let distance = self.distance;
-                    let dist = distance(point, &self.points.row(i));
+                    let dist = self.distance.get(point, &self.points.row(i));
 
                     if dist < radius {
                         Some(Neighbor::new(i, dist))
@@ -266,8 +252,8 @@ where
         } else {
             let child1 = root * 2 + 1;
             let child2 = child1 + 1;
-            let lb1 = self.nodes[child1].distance_lower_bound(point, self.distance);
-            let lb2 = self.nodes[child2].distance_lower_bound(point, self.distance);
+            let lb1 = self.nodes[child1].distance_lower_bound(point, self.distance.as_ref());
+            let lb2 = self.nodes[child2].distance_lower_bound(point, self.distance.as_ref());
             let (child1, child2) = if lb1 < lb2 {
                 (child1, child2)
             } else {
@@ -295,7 +281,7 @@ where
         loop {
             let subroot = subtrees_to_visit.pop().expect("should not be empty");
             let root_node = &self.nodes[subroot];
-            let (lb, ub) = root_node.distance_bounds(point, self.distance);
+            let (lb, ub) = root_node.distance_bounds(point, self.distance.as_ref());
 
             if lb > radius {
                 if subtrees_to_visit.is_empty() {
@@ -309,8 +295,7 @@ where
                 neighbors.extend(self.idx[root_node.range.clone()].iter().copied());
             } else if root_node.is_leaf {
                 neighbors.extend(self.idx[root_node.range.clone()].iter().filter_map(|&i| {
-                    let distance = self.distance;
-                    let dist = distance(point, &self.points.row(i));
+                    let dist = self.distance.get(point, &self.points.row(i));
                     if dist < radius {
                         Some(i)
                     } else {
@@ -406,7 +391,7 @@ where
     /// Panics if any row in `points` is not contiguous in memory.
     #[allow(clippy::cast_precision_loss)] // The precision provided by 54-bit-wide mantissa is
                                           // good enough in computing mean.
-    fn init(&mut self, points: &CowArray<A, Ix2>, idx: &[usize], distance: Distance<A>) {
+    fn init(&mut self, points: &CowArray<A, Ix2>, idx: &[usize], distance: &dyn Distance<A>) {
         let mut sum = idx
             .iter()
             .fold(Array1::<A>::zeros(points.ncols()), |mut sum, &i| {
@@ -420,12 +405,12 @@ where
         self.centroid = sum;
 
         self.radius = idx.iter().fold(A::zero(), |max, &i| {
-            A::max(distance(&self.centroid.view(), &points.row(i)), max)
+            A::max(distance.get(&self.centroid.view(), &points.row(i)), max)
         });
     }
 
-    fn distance_bounds(&self, point: &ArrayView1<A>, distance: Distance<A>) -> (A, A) {
-        let centroid_dist = distance(point, &self.centroid.view());
+    fn distance_bounds(&self, point: &ArrayView1<A>, distance: &dyn Distance<A>) -> (A, A) {
+        let centroid_dist = distance.get(point, &self.centroid.view());
         let mut lb = centroid_dist - self.radius;
         if lb < A::zero() {
             lb = A::zero();
@@ -434,8 +419,8 @@ where
         (lb, ub)
     }
 
-    fn distance_lower_bound(&self, point: &ArrayView1<A>, distance: Distance<A>) -> A {
-        let centroid_dist = distance(point, &self.centroid.view());
+    fn distance_lower_bound(&self, point: &ArrayView1<A>, distance: &dyn Distance<A>) -> A {
+        let centroid_dist = distance.get(point, &self.centroid.view());
         let lb = centroid_dist - self.radius;
         if lb < A::zero() {
             A::zero()
@@ -471,8 +456,7 @@ fn build_subtree<A>(
     points: &CowArray<A, Ix2>,
     root: usize,
     range: Range<usize>,
-    distance: Distance<A>,
-    reduced_distance: Distance<A>,
+    distance: &dyn Distance<A>,
 ) where
     A: Float + AddAssign + DivAssign + FromPrimitive,
 {
@@ -497,24 +481,8 @@ fn build_subtree<A>(
     halve_node_indices(&mut idx[range.clone()], &col);
 
     let mid = (range.start + range.end) / 2;
-    build_subtree(
-        nodes,
-        idx,
-        points,
-        left,
-        range.start..mid,
-        distance,
-        reduced_distance,
-    );
-    build_subtree(
-        nodes,
-        idx,
-        points,
-        left + 1,
-        mid..range.end,
-        distance,
-        reduced_distance,
-    );
+    build_subtree(nodes, idx, points, left, range.start..mid, distance);
+    build_subtree(nodes, idx, points, left + 1, mid..range.end, distance);
 }
 
 /// Divides the node index array into two equal-sized parts.
@@ -602,12 +570,8 @@ mod test {
     #[should_panic]
     fn ball_tree_empty() {
         let data: [[f64; 0]; 0] = [];
-        let tree = BallTree::new(
-            aview2(&data),
-            distance::euclidean,
-            Some(distance::euclidean_reduced),
-        )
-        .expect("`data` should not be empty");
+        let tree = BallTree::new(aview2(&data), Box::new(distance::Euclidean::default()))
+            .expect("`data` should not be empty");
         let point = aview1(&[0., 0.]);
         tree.query_nearest(&point);
     }
@@ -615,12 +579,8 @@ mod test {
     #[test]
     fn ball_tree_3() {
         let array = array![[1., 1.], [1., 1.1], [9., 9.]];
-        let tree = BallTree::new(
-            array,
-            distance::euclidean,
-            Some(distance::euclidean_reduced),
-        )
-        .expect("`array` should not be empty");
+        let tree = BallTree::new(array, Box::new(distance::Euclidean::default()))
+            .expect("`array` should not be empty");
 
         let point = aview1(&[0., 0.]);
         let neighbor = tree.query_nearest(&point);
@@ -672,12 +632,8 @@ mod test {
             [-2.0, 3.0],
             [-2.2, 3.1],
         ];
-        let tree = BallTree::new(
-            array,
-            distance::euclidean,
-            Some(distance::euclidean_reduced),
-        )
-        .expect("`array` should not be empty");
+        let tree = BallTree::new(array, Box::new(distance::Euclidean::default()))
+            .expect("`array` should not be empty");
 
         let point = aview1(&[1., 2.]);
         let neighbor = tree.query_nearest(&point);
@@ -697,12 +653,8 @@ mod test {
             [1.0, 1.0],
             [1.0, 1.0],
         ];
-        let tree = BallTree::new(
-            array,
-            distance::euclidean,
-            Some(distance::euclidean_reduced),
-        )
-        .expect("`array` should not be empty");
+        let tree = BallTree::new(array, Box::new(distance::Euclidean::default()))
+            .expect("`array` should not be empty");
 
         let point = aview1(&[1., 2.]);
         let neighbor = tree.query_nearest(&point);
@@ -714,13 +666,16 @@ mod test {
         const DIMENSION: usize = 3;
 
         let array = Array::random((40, DIMENSION), Uniform::new(0., 1.));
-        let bt = BallTree::new(array.view(), distance::euclidean, None)
-            .expect("`array` should not be empty");
+        let bt = BallTree::new(
+            array.view(),
+            Box::new(distance::EuclideanNoReduced::default()),
+        )
+        .expect("`array` should not be empty");
+        let euclidean: Box<dyn distance::Distance<f64>> = Box::new(distance::Euclidean::default());
         for _ in 0..10 {
             let query = Array::random(DIMENSION, Uniform::new(0., 1.));
             let (_, bt_distances) = bt.query(&query, 5);
-            let naive_neighbors =
-                naive_k_nearest_neighbors(&array, &query.view(), 5, distance::euclidean);
+            let naive_neighbors = naive_k_nearest_neighbors(&array, &query.view(), 5, &euclidean);
             for (bt_dist, naive_neighbor) in bt_distances.iter().zip(naive_neighbors.iter()) {
                 assert!(approx::abs_diff_eq!(
                     *bt_dist,
@@ -733,12 +688,8 @@ mod test {
     #[test]
     fn ball_tree_query_radius() {
         let array = array![[0.], [2.], [3.], [4.], [6.], [8.], [10.]];
-        let bt = BallTree::new(
-            array,
-            distance::euclidean,
-            Some(distance::euclidean_reduced),
-        )
-        .expect("`array` should not be empty");
+        let bt = BallTree::new(array, Box::new(distance::Euclidean::default()))
+            .expect("`array` should not be empty");
 
         let neighbors = bt.query_radius(&aview1(&[0.1]), 1.);
         assert_eq!(neighbors, &[0]);
@@ -756,12 +707,13 @@ mod test {
         let array = array![[0., 1.], [0., 9.], [0., 2.]];
         let idx: [usize; 3] = [0, 1, 2];
         let mut node = Node::default();
-        node.init(&array.view().into(), &idx, distance::euclidean);
+        let distance: Box<dyn distance::Distance<f64>> = Box::new(distance::Euclidean::default());
+        node.init(&array.view().into(), &idx, distance.as_ref());
         assert_eq!(node.centroid, arr1(&[0., 4.]));
         assert_eq!(node.radius, 5.);
 
         let idx: [usize; 2] = [0, 2];
-        node.init(&array.into(), &idx, distance::euclidean);
+        node.init(&array.into(), &idx, distance.as_ref());
         assert_eq!(node.centroid, arr1(&[0., 1.5]));
     }
 
@@ -842,7 +794,7 @@ mod test {
         neighbors: &'a ArrayBase<S, Ix2>,
         point: &ArrayView1<A>,
         k: usize,
-        distance: Distance<A>,
+        distance: &Box<dyn Distance<A>>,
     ) -> Vec<Neighbor<A>>
     where
         A: Float,
@@ -853,7 +805,7 @@ mod test {
             .enumerate()
             .map(|(i, n)| Neighbor {
                 idx: i,
-                distance: distance(&n, point).into(),
+                distance: distance.get(&n, point).into(),
             })
             .collect::<Vec<Neighbor<A>>>();
         knn.sort();
