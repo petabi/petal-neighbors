@@ -15,7 +15,7 @@ where
     points: CowArray<'a, A, Ix2>,
     nodes: Vec<Node<A>>,
     root: usize,
-    distance: Distance<A>,
+    distance: Box<dyn Distance<A>>,
 }
 
 impl<'a, A> VantagePointTree<'a, A>
@@ -29,7 +29,7 @@ where
     /// * `ArrayError::Empty` if `points` is an empty array.
     /// * `ArrayError::NotContiguous` if any row in `points` is not
     ///   contiguous in memory.
-    pub fn new<T>(points: T, distance: Distance<A>) -> Result<Self, ArrayError>
+    pub fn new<T>(points: T, distance: Box<dyn Distance<A>>) -> Result<Self, ArrayError>
     where
         T: Into<CowArray<'a, A, Ix2>>,
     {
@@ -43,7 +43,7 @@ where
         }
 
         let mut nodes = Vec::with_capacity(n_points);
-        let root = Self::create_root(&points, distance, &mut nodes);
+        let root = Self::create_root(&points, distance.as_ref(), &mut nodes);
         Ok(VantagePointTree {
             points,
             nodes,
@@ -63,7 +63,7 @@ where
     where
         T: Into<CowArray<'a, A, Ix2>>,
     {
-        Self::new(points, distance::euclidean::<A>)
+        Self::new(points, Box::new(distance::Euclidean::default()))
     }
 
     /// Finds the nearest neighbor and its distance in the tree.
@@ -93,8 +93,10 @@ where
     }
 
     fn search_node(&self, node: &Node<A>, needle: &ArrayView1<A>, nearest: &mut DistanceIndex<A>) {
-        let distance = self.distance;
-        let distance = distance(&self.points.row(node.vantage_point), needle).into();
+        let distance = self
+            .distance
+            .get(&self.points.row(node.vantage_point), needle)
+            .into();
 
         if distance < nearest.distance {
             nearest.distance = distance;
@@ -124,7 +126,7 @@ where
 
     fn create_root<S>(
         points: &ArrayBase<S, Ix2>,
-        distance: Distance<A>,
+        distance: &dyn Distance<A>,
         nodes: &mut Vec<Node<A>>,
     ) -> usize
     where
@@ -141,7 +143,7 @@ where
 
     fn create_node<S>(
         points: &ArrayBase<S, Ix2>,
-        distance: Distance<A>,
+        distance: &dyn Distance<A>,
         indexes: &mut [DistanceIndex<A>],
         nodes: &mut Vec<Node<A>>,
     ) -> usize
@@ -167,7 +169,9 @@ where
         let rest = &mut indexes[..vp_pos];
 
         for r in rest.iter_mut() {
-            r.distance = distance(&points.row(r.id), &points.row(vantage_point)).into();
+            r.distance = distance
+                .get(&points.row(r.id), &points.row(vantage_point))
+                .into();
         }
         rest.sort_unstable_by(|a, b| a.distance.cmp(&b.distance));
 

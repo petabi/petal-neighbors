@@ -5,6 +5,12 @@ file is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- add `Distance` trait, use it for distance calculation instead of function pointer.
+
 ## [0.6.0] - 2021-03-29
 
 ### Changed
@@ -76,6 +82,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - A ball tree data structure to find nearest neighbors.
 
+[Unreleased]: https://github.com/petabi/petal-neighbors/compare/0.6.0...master
 [0.6.0]: https://github.com/petabi/petal-neighbors/compare/0.5.2...0.6.0
 [0.5.2]: https://github.com/petabi/petal-neighbors/compare/0.5.0...0.5.2
 [0.5.1]: https://github.com/petabi/petal-neighbors/compare/0.5.0...0.5.1
