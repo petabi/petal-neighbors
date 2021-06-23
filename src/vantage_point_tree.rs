@@ -1,4 +1,4 @@
-use crate::distance::{self, Distance};
+use crate::distance::{self, Metric};
 use crate::ArrayError;
 use ndarray::{ArrayBase, ArrayView1, CowArray, Data, Ix1, Ix2};
 use num_traits::{Float, Zero};
@@ -8,19 +8,40 @@ use std::ops::AddAssign;
 /// A data structure for nearest neighbor search in a multi-dimensional space,
 /// which is partitioned into two parts for each vantage point: those points
 /// closer to the vantage point than a threshold, and those farther.
-pub struct VantagePointTree<'a, A>
+pub struct VantagePointTree<'a, A, M>
 where
     A: Float,
+    M: Metric<A>,
 {
     points: CowArray<'a, A, Ix2>,
     nodes: Vec<Node<A>>,
     root: usize,
-    distance: Box<dyn Distance<A>>,
+    metric: M,
 }
 
-impl<'a, A> VantagePointTree<'a, A>
+impl<'a, A> VantagePointTree<'a, A, distance::Euclidean>
 where
     A: Float + Zero + AddAssign + 'a,
+{
+    /// Builds a vantage point tree with a euclidean distance metric.
+    ///
+    /// # Errors
+    ///
+    /// * `ArrayError::Empty` if `points` is an empty array.
+    /// * `ArrayError::NotContiguous` if any row in `points` is not
+    ///   contiguous in memory.
+    pub fn euclidean<T>(points: T) -> Result<Self, ArrayError>
+    where
+        T: Into<CowArray<'a, A, Ix2>>,
+    {
+        Self::new(points, distance::Euclidean::default())
+    }
+}
+
+impl<'a, A, M> VantagePointTree<'a, A, M>
+where
+    A: Float + Zero + AddAssign + 'a,
+    M: Metric<A>,
 {
     /// Builds a vantage point tree using the given distance metric.
     ///
@@ -29,7 +50,7 @@ where
     /// * `ArrayError::Empty` if `points` is an empty array.
     /// * `ArrayError::NotContiguous` if any row in `points` is not
     ///   contiguous in memory.
-    pub fn new<T>(points: T, distance: Box<dyn Distance<A>>) -> Result<Self, ArrayError>
+    pub fn new<T>(points: T, metric: M) -> Result<Self, ArrayError>
     where
         T: Into<CowArray<'a, A, Ix2>>,
     {
@@ -43,27 +64,13 @@ where
         }
 
         let mut nodes = Vec::with_capacity(n_points);
-        let root = Self::create_root(&points, distance.as_ref(), &mut nodes);
+        let root = Self::create_root(&points, &metric, &mut nodes);
         Ok(VantagePointTree {
             points,
             nodes,
             root,
-            distance,
+            metric,
         })
-    }
-
-    /// Builds a vantage point tree with a euclidean distance metric.
-    ///
-    /// # Errors
-    ///
-    /// * `ArrayError::Empty` if `points` is an empty array.
-    /// * `ArrayError::NotContiguous` if any row in `points` is not
-    ///   contiguous in memory.
-    pub fn euclidean<T>(points: T) -> Result<Self, ArrayError>
-    where
-        T: Into<CowArray<'a, A, Ix2>>,
-    {
-        Self::new(points, Box::new(distance::Euclidean::default()))
     }
 
     /// Finds the nearest neighbor and its distance in the tree.
@@ -94,8 +101,8 @@ where
 
     fn search_node(&self, node: &Node<A>, needle: &ArrayView1<A>, nearest: &mut DistanceIndex<A>) {
         let distance = self
-            .distance
-            .get(&self.points.row(node.vantage_point), needle)
+            .metric
+            .distance(&self.points.row(node.vantage_point), needle)
             .into();
 
         if distance < nearest.distance {
@@ -124,13 +131,10 @@ where
         }
     }
 
-    fn create_root<S>(
-        points: &ArrayBase<S, Ix2>,
-        distance: &dyn Distance<A>,
-        nodes: &mut Vec<Node<A>>,
-    ) -> usize
+    fn create_root<S>(points: &ArrayBase<S, Ix2>, metric: &M, nodes: &mut Vec<Node<A>>) -> usize
     where
         S: Data<Elem = A>,
+        M: Metric<A>,
     {
         let mut indexes: Vec<_> = (0..points.nrows())
             .map(|i| DistanceIndex {
@@ -138,12 +142,12 @@ where
                 id: i,
             })
             .collect();
-        Self::create_node(points, distance, &mut indexes, nodes)
+        Self::create_node(points, metric, &mut indexes, nodes)
     }
 
     fn create_node<S>(
         points: &ArrayBase<S, Ix2>,
-        distance: &dyn Distance<A>,
+        metric: &M,
         indexes: &mut [DistanceIndex<A>],
         nodes: &mut Vec<Node<A>>,
     ) -> usize
@@ -169,8 +173,8 @@ where
         let rest = &mut indexes[..vp_pos];
 
         for r in rest.iter_mut() {
-            r.distance = distance
-                .get(&points.row(r.id), &points.row(vantage_point))
+            r.distance = metric
+                .distance(&points.row(r.id), &points.row(vantage_point))
                 .into();
         }
         rest.sort_unstable_by(|a, b| a.distance.cmp(&b.distance));
@@ -187,8 +191,8 @@ where
             radius: radius.into_inner(),
         });
 
-        let near = Self::create_node(points, distance, near, nodes);
-        let far = Self::create_node(points, distance, far, nodes);
+        let near = Self::create_node(points, metric, near, nodes);
+        let far = Self::create_node(points, metric, far, nodes);
         nodes[id].near = near;
         nodes[id].far = far;
         id
