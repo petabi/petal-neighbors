@@ -666,11 +666,8 @@ mod test {
         const DIMENSION: usize = 3;
 
         let array = Array::random((40, DIMENSION), Uniform::new(0., 1.));
-        let bt = BallTree::new(
-            array.view(),
-            Box::new(distance::EuclideanNoReduced::default()),
-        )
-        .expect("`array` should not be empty");
+        let bt = BallTree::new(array.view(), Box::new(distance::Euclidean::default()))
+            .expect("`array` should not be empty");
         let euclidean: Box<dyn distance::Distance<f64>> = Box::new(distance::Euclidean::default());
         for _ in 0..10 {
             let query = Array::random(DIMENSION, Uniform::new(0., 1.));
