@@ -11,6 +11,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - add `Metric` trait, use it for distance calculation instead of function pointer.
 
+### Removed
+
+- `distance` is removed from public API.
+
 ## [0.6.0] - 2021-03-29
 
 ### Changed

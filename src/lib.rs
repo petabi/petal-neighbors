@@ -1,5 +1,5 @@
 mod ball_tree;
-pub mod distance;
+mod distance;
 mod vantage_point_tree;
 
 pub use ball_tree::BallTree;
