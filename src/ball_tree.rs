@@ -69,7 +69,7 @@ where
     ///
     /// ```
     /// use ndarray::{array, aview1};
-    /// use petal_neighbors::{BallTree, distance};
+    /// use petal_neighbors::BallTree;
     ///
     /// let points = array![[1., 1.], [1., 2.], [9., 9.]];
     /// let tree = BallTree::euclidean(points).expect("valid array");
@@ -92,7 +92,7 @@ where
     ///
     /// ```
     /// use ndarray::{array, aview1};
-    /// use petal_neighbors::{BallTree, distance};
+    /// use petal_neighbors::BallTree;
     ///
     /// let points = array![[1., 1.], [1., 2.], [9., 9.]];
     /// let tree = BallTree::euclidean(points).expect("non-empty input");
@@ -123,7 +123,7 @@ where
     ///
     /// ```
     /// use ndarray::{array, aview1};
-    /// use petal_neighbors::{BallTree, distance};
+    /// use petal_neighbors::BallTree;
     ///
     /// let points = array![[1., 0.], [2., 0.], [9., 0.]];
     /// let tree = BallTree::euclidean(points).expect("non-empty input");

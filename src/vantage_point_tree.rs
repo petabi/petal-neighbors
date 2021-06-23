@@ -79,7 +79,7 @@ where
     ///
     /// ```
     /// use ndarray::{array, aview1};
-    /// use petal_neighbors::{VantagePointTree, distance};
+    /// use petal_neighbors::VantagePointTree;
     ///
     /// let points = array![[1., 1.], [1., 2.], [9., 9.]];
     /// let tree = VantagePointTree::euclidean(points).expect("valid array");
