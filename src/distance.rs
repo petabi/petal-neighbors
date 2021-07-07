@@ -9,8 +9,10 @@ pub trait Metric<A> {
     fn distance(&self, _: &ArrayView1<A>, _: &ArrayView1<A>) -> A;
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Euclidean {}
+
+unsafe impl Sync for Euclidean {}
 
 impl<A> Metric<A> for Euclidean
 where
