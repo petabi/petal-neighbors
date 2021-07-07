@@ -5,6 +5,12 @@ file is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Implement `Clone` and `Sync` for `Euclidean` struct.
+
 ## [0.7.0] - 2021-06-23
 
 ### Changed
@@ -83,6 +89,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - A ball tree data structure to find nearest neighbors.
 
+[Unreleased]: https://github.com/petabi/petal-neighbors/compare/0.7.0...master
 [0.7.0]: https://github.com/petabi/petal-neighbors/compare/0.6.0...0.7.0
 [0.6.0]: https://github.com/petabi/petal-neighbors/compare/0.5.2...0.6.0
 [0.5.2]: https://github.com/petabi/petal-neighbors/compare/0.5.0...0.5.2
