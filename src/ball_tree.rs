@@ -466,7 +466,7 @@ fn build_subtree<A, M>(
     let mut root_node = nodes.get_mut(root).expect("root node index out of range");
     root_node.init(
         points,
-        &idx.get(range.clone()).expect("invalid subtree range"),
+        idx.get(range.clone()).expect("invalid subtree range"),
         metric,
     );
     root_node.range = range.clone();
