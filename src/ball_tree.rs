@@ -17,10 +17,10 @@ where
     A: Float,
     M: Metric<A>,
 {
-    points: CowArray<'a, A, Ix2>,
-    idx: Vec<usize>,
-    nodes: Vec<Node<A>>,
-    metric: M,
+    pub points: CowArray<'a, A, Ix2>,
+    pub idx: Vec<usize>,
+    pub nodes: Vec<Node<A>>,
+    pub metric: M,
 }
 
 impl<'a, A, M> BallTree<'a, A, M>
@@ -374,11 +374,11 @@ impl<A> Eq for Neighbor<A> where A: Float {}
 
 /// A node containing a range of points in a ball tree.
 #[derive(Clone, Debug)]
-struct Node<A> {
-    range: Range<usize>,
-    centroid: Array1<A>,
-    radius: A,
-    is_leaf: bool,
+pub struct Node<A> {
+    pub range: Range<usize>,
+    pub centroid: Array1<A>,
+    pub radius: A,
+    pub is_leaf: bool,
 }
 
 impl<A> Node<A>
