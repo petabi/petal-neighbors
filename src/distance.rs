@@ -1,6 +1,6 @@
 //! Distance metrics.
 
-use ndarray::ArrayView1;
+use ndarray::{Array2, ArrayView1, ArrayView2};
 use num_traits::{Float, Zero};
 use std::ops::AddAssign;
 
@@ -28,5 +28,42 @@ where
                 sum
             })
             .sqrt()
+    }
+}
+
+pub fn pairwise<A: Float + Zero + AddAssign>(
+    x: ArrayView2<A>,
+    metric: &dyn Metric<A>,
+) -> Array2<A> {
+    let mut distances = Array2::<A>::zeros((x.nrows(), x.nrows()));
+    if x.nrows() < 2 {
+        return distances;
+    }
+    for i in 0..x.nrows() {
+        for j in (i + 1)..x.nrows() {
+            let d = metric.distance(&x.row(i), &x.row(j));
+            distances[[i, j]] = d;
+            distances[[j, i]] = d;
+        }
+    }
+    distances
+}
+
+#[cfg(test)]
+mod test {
+    use ndarray::arr2;
+
+    #[test]
+    fn pairwise() {
+        let x = arr2(&[[3., 4.], [0., 0.]]);
+        let distances = super::pairwise(x.view(), &super::Euclidean {});
+        assert_eq!(distances, arr2(&[[0., 5.], [5., 0.]]));
+    }
+
+    #[test]
+    fn pairwise_one() {
+        let x = arr2(&[[0.]]);
+        let distances = super::pairwise(x.view(), &super::Euclidean {});
+        assert_eq!(distances, arr2(&[[0.]]));
     }
 }
