@@ -5,6 +5,16 @@ file is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Add pairwise distance computation function.
+
+### Changed
+
+- Make fields of `Node`, `BallTree` accessible for user.
+
 ## [0.7.1] - 2021-07-06
 
 ### Added
@@ -89,6 +99,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - A ball tree data structure to find nearest neighbors.
 
+[0.7.1]: https://github.com/petabi/petal-neighbors/compare/0.7.1...master
 [0.7.1]: https://github.com/petabi/petal-neighbors/compare/0.7.0...0.7.1
 [0.7.0]: https://github.com/petabi/petal-neighbors/compare/0.6.0...0.7.0
 [0.6.0]: https://github.com/petabi/petal-neighbors/compare/0.5.2...0.6.0
