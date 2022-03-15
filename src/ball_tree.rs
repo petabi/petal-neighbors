@@ -578,6 +578,23 @@ mod test {
     }
 
     #[test]
+    #[should_panic]
+    fn ball_tree_column_base() {
+        let array = array![[1., 1.], [1., 1.1], [9., 9.]];
+        let fortran = array.reversed_axes();
+        let _ = BallTree::euclidean(fortran).expect("`array` should not be empty");
+    }
+
+    #[test]
+    fn ball_tree_metric() {
+        let array = array![[1., 1.], [1., 1.1], [9., 9.]];
+        let tree = BallTree::new(array.clone(), Euclidean::default())
+            .expect("`array` should not be empty");
+        let tree1 = BallTree::euclidean(array).expect("`array` should not be empty");
+        assert_eq!(tree.metric, tree1.metric);
+    }
+
+    #[test]
     fn ball_tree_3() {
         let array = array![[1., 1.], [1., 1.1], [9., 9.]];
         let tree = BallTree::euclidean(array).expect("`array` should not be empty");
@@ -597,6 +614,12 @@ mod test {
         let mut neighbors = tree.query_radius(&point, 2.);
         neighbors.sort_unstable();
         assert_eq!(neighbors, &[0, 1]);
+
+        let neighbors = tree.nearest_neighbor_in_subtree(&aview1(&[20., 20.]), 0, 1.);
+        assert_eq!(neighbors, None);
+
+        let neighbors = tree.query_radius(&aview1(&[20., 20.]), 1.);
+        assert_eq!(neighbors, &[]);
 
         let point = aview1(&[1.1, 1.2]);
         let neighbor = tree.query_nearest(&point);
@@ -658,6 +681,10 @@ mod test {
         let point = aview1(&[1., 2.]);
         let neighbor = tree.query_nearest(&point);
         assert!(approx::abs_diff_eq!(neighbor.1, 1_f64.sqrt()));
+
+        let point = aview1(&[1., 1.]);
+        let neighbor = tree.query_nearest(&point);
+        assert!(approx::abs_diff_eq!(neighbor.1, 0_f64.sqrt()));
     }
 
     #[test]
