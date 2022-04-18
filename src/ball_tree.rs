@@ -5,8 +5,6 @@ use num_traits::{Float, FromPrimitive, Zero};
 use ordered_float::OrderedFloat;
 use std::cmp;
 use std::collections::BinaryHeap;
-use std::convert::TryFrom;
-use std::mem::size_of;
 use std::num::NonZeroUsize;
 use std::ops::{AddAssign, DivAssign, Range};
 
@@ -48,8 +46,7 @@ where
             return Err(ArrayError::NotContiguous);
         }
 
-        let height = u32::try_from(size_of::<usize>() * 8).expect("smaller than u32::max_value()")
-            - n_points.leading_zeros();
+        let height = usize::BITS - n_points.leading_zeros();
         let size = 1_usize.wrapping_shl(height) - 1;
 
         let mut idx: Vec<usize> = (0..n_points).collect();
