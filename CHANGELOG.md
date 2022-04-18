@@ -14,6 +14,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - Make fields of `Node`, `BallTree` accessible for user.
+- MSRV is changed to 1.53.0.
 
 ## [0.7.1] - 2021-07-06
 
