@@ -295,6 +295,65 @@ where
 
         neighbors
     }
+
+    // calculate minimum distance between the nodes:
+    //   max(||n1_centroid - n2_centroid|| - R_n1 - R_n2, 0)
+    ///
+    /// # Panics
+    ///
+    /// Panics if `n1 >= self.nodes.len()` or `n2 >= self.nodes.len()`
+    #[inline]
+    pub fn node_distance_lower_bound(&self, n1: usize, n2: usize) -> A {
+        assert!(n1 < self.nodes.len() && n2 < self.nodes.len());
+        let n1 = &self.nodes[n1];
+        let n2 = &self.nodes[n2];
+        let lb = self
+            .metric
+            .distance(&n1.centroid.view(), &n2.centroid.view())
+            - n1.radius
+            - n2.radius;
+        if lb < A::zero() {
+            A::zero()
+        } else {
+            lb
+        }
+    }
+
+    #[inline]
+    pub fn children_of(&self, n: usize) -> Option<(usize, usize)> {
+        if self.nodes[n].is_leaf {
+            None
+        } else {
+            let left = 2 * n + 1;
+            let right = left + 1;
+            Some((left, right))
+        }
+    }
+
+    #[inline]
+    pub fn points_of(&self, n: usize) -> &[usize] {
+        &self.idx[self.nodes[n].range.clone()]
+    }
+
+    #[inline]
+    pub fn radius_of(&self, n: usize) -> A {
+        self.nodes[n].radius
+    }
+
+    #[inline]
+    pub fn compare_nodes(&self, x: usize, y: usize) -> Option<std::cmp::Ordering> {
+        self.nodes[x].radius.partial_cmp(&self.nodes[y].radius)
+    }
+
+    #[inline]
+    pub fn num_nodes(&self) -> usize {
+        self.nodes.len()
+    }
+
+    #[inline]
+    pub fn num_points(&self) -> usize {
+        self.points.nrows()
+    }
 }
 
 impl<'a, A> BallTree<'a, A, Euclidean>
@@ -375,10 +434,10 @@ impl<A> Eq for Neighbor<A> where A: Float {}
 /// A node containing a range of points in a ball tree.
 #[derive(Clone, Debug)]
 pub struct Node<A> {
-    pub range: Range<usize>,
-    pub centroid: Array1<A>,
-    pub radius: A,
-    pub is_leaf: bool,
+    range: Range<usize>,
+    centroid: Array1<A>,
+    radius: A,
+    is_leaf: bool,
 }
 
 impl<A> Node<A>

@@ -7,6 +7,9 @@ use std::ops::AddAssign;
 /// The type of a distance metric function.
 pub trait Metric<A> {
     fn distance(&self, _: &ArrayView1<A>, _: &ArrayView1<A>) -> A;
+    fn rdistance(&self, _: &ArrayView1<A>, _: &ArrayView1<A>) -> A;
+    fn rdistance_to_distance(&self, _: A) -> A;
+    fn distance_to_rdistance(&self, _: A) -> A;
 }
 
 #[derive(Default, Clone, Debug, PartialEq)]
@@ -28,6 +31,25 @@ where
                 sum
             })
             .sqrt()
+    }
+    /// Euclidean reduce distance metric.
+    fn rdistance(&self, x1: &ArrayView1<A>, x2: &ArrayView1<A>) -> A {
+        x1.iter()
+            .zip(x2.iter())
+            .fold(A::zero(), |mut sum, (&v1, &v2)| {
+                let diff = v1 - v2;
+                sum += diff * diff;
+                sum
+            })
+    }
+    /// Euclidean reduce distance metric.
+    fn rdistance_to_distance(&self, d: A) -> A {
+        d.sqrt()
+    }
+
+    /// Euclidean reduce distance metric.
+    fn distance_to_rdistance(&self, d: A) -> A {
+        d.powi(2)
     }
 }
 
