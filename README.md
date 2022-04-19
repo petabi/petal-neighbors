@@ -26,7 +26,7 @@ This crate is guaranteed to compile on Rust 1.53 and later.
 
 ## License
 
-Copyright 2019-2021 Petabi, Inc.
+Copyright 2019-2022 Petabi, Inc.
 
 Licensed under [Apache License, Version 2.0][apache-license] (the "License");
 you may not use this crate except in compliance with the License.
