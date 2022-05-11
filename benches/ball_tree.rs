@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use ndarray::ArrayView;
+use ndarray::{ArrayBase, ArrayView, CowRepr};
 use ndarray_rand::rand::{rngs::StdRng, Rng, SeedableRng};
 use petal_neighbors::BallTree;
 
@@ -29,7 +29,10 @@ fn query_radius(c: &mut Criterion) {
         b.iter(|| {
             for i in 0..n {
                 let query = &data[i * dim..i * dim + dim];
-                tree.query_radius(&query.into(), 0.2);
+                tree.query_radius(
+                    &<ArrayBase<CowRepr<f64>, _> as From<&[f64]>>::from(query),
+                    0.2,
+                );
             }
         })
     });
