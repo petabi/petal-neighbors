@@ -20,10 +20,6 @@ let (indices, distances) = tree.query(&aview1(&[3., 3.]), 2);
 assert_eq!(indices, &[1, 0]);  // points[1] is the nearest, points[0] the next.
 ```
 
-## Minimum Supported Rust Version
-
-This crate is guaranteed to compile on Rust 1.53 and later.
-
 ## License
 
 Copyright 2019-2022 Petabi, Inc.
