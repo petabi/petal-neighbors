@@ -12,7 +12,7 @@ pub trait Metric<A> {
     fn distance_to_rdistance(&self, _: A) -> A;
 }
 
-#[derive(Default, Clone, Debug, PartialEq)]
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct Euclidean {}
 
 unsafe impl Sync for Euclidean {}

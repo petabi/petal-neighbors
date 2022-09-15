@@ -7,6 +7,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+
+- `Euclidean` derives `Eq`.
+
 ### Changed
 
 - Switched to edition 2021. This requires Rust 1.56 or newer.
