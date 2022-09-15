@@ -13,7 +13,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Switched to edition 2021. This requires Rust 1.56 or newer.
+- Switched to edition 2021.
+- Requires Rust 1.57 or newer.
 
 ## [0.8.0] - 2022-04-18
 
