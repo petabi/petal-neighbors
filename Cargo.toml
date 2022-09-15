@@ -28,7 +28,7 @@ thiserror = "1"
 
 [dev-dependencies]
 approx = "0.5"
-criterion = "0.3"
+criterion = "0.4"
 ndarray-rand = "0.14.0"
 
 [[bench]]
