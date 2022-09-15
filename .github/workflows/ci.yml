@@ -43,3 +43,5 @@ jobs:
       run: cargo fmt -- --check
     - name: Clippy
       run: cargo clippy -- -D warnings -W clippy::pedantic
+    - name: markdownlint
+      uses: articulate/actions-markdownlint@v1
