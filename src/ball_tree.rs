@@ -202,7 +202,11 @@ where
         neighbors: &mut BinaryHeap<Neighbor<A>>,
     ) {
         let root_node = &self.nodes[root];
-        if root_node.distance_lower_bound(point, &self.metric) > radius {
+        let mut kth_distance = radius;
+        if neighbors.len() == k.get() {
+            kth_distance = neighbors.peek().expect("not empty").distance.into_inner();
+        }
+        if root_node.distance_lower_bound(point, &self.metric) > kth_distance {
             return;
         }
 

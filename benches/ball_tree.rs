@@ -17,6 +17,28 @@ fn build(c: &mut Criterion) {
     });
 }
 
+fn query(c: &mut Criterion) {
+    let n = black_box(2000);
+    let dim = black_box(10);
+    let k = black_box(5);
+
+    let mut rng = StdRng::from_seed(*b"ball tree query_radius test seed");
+    let data: Vec<f64> = (0..n * dim).map(|_| rng.gen()).collect();
+    let array = ArrayView::from_shape((n, dim), &data).unwrap();
+    let tree = BallTree::euclidean(array).expect("`array` is not empty");
+    c.bench_function("query", |b| {
+        b.iter(|| {
+            for i in 0..n {
+                let query = &data[i * dim..i * dim + dim];
+                tree.query(
+                    &<ArrayBase<CowRepr<f64>, _> as From<&[f64]>>::from(query),
+                    k,
+                );
+            }
+        })
+    });
+}
+
 fn query_radius(c: &mut Criterion) {
     let n = black_box(64);
     let dim = black_box(10);
@@ -38,5 +60,5 @@ fn query_radius(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, build, query_radius);
+criterion_group!(benches, build, query, query_radius);
 criterion_main!(benches);
