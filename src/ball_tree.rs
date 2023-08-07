@@ -519,7 +519,7 @@ fn build_subtree<A, M>(
     M: Metric<A>,
 {
     let n_nodes = nodes.len();
-    let mut root_node = nodes.get_mut(root).expect("root node index out of range");
+    let root_node = nodes.get_mut(root).expect("root node index out of range");
     root_node.init(
         points,
         idx.get(range.clone()).expect("invalid subtree range"),
