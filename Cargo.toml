@@ -20,7 +20,7 @@ codecov = { repository = "petabi/petal-neighbors", service = "github" }
 [dependencies]
 ndarray = "0.15"
 num-traits = "0.2"
-ordered-float = "3"
+ordered-float = "4"
 thiserror = "1"
 
 [dev-dependencies]
