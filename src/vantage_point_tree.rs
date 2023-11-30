@@ -2,17 +2,13 @@ use crate::distance::{self, Metric};
 use crate::ArrayError;
 use ndarray::{ArrayBase, ArrayView1, CowArray, Data, Ix1, Ix2};
 use num_traits::{Float, Zero};
-use ordered_float::OrderedFloat;
+use ordered_float::{FloatCore, OrderedFloat};
 use std::ops::AddAssign;
 
 /// A data structure for nearest neighbor search in a multi-dimensional space,
 /// which is partitioned into two parts for each vantage point: those points
 /// closer to the vantage point than a threshold, and those farther.
-pub struct VantagePointTree<'a, A, M>
-where
-    A: Float,
-    M: Metric<A>,
-{
+pub struct VantagePointTree<'a, A, M> {
     points: CowArray<'a, A, Ix2>,
     nodes: Vec<Node<A>>,
     root: usize,
@@ -21,7 +17,7 @@ where
 
 impl<'a, A> VantagePointTree<'a, A, distance::Euclidean>
 where
-    A: Float + Zero + AddAssign + 'a,
+    A: Float + FloatCore + Zero + AddAssign + 'a,
 {
     /// Builds a vantage point tree with a euclidean distance metric.
     ///
@@ -40,7 +36,7 @@ where
 
 impl<'a, A, M> VantagePointTree<'a, A, M>
 where
-    A: Float + Zero + AddAssign + 'a,
+    A: FloatCore + Zero + AddAssign + 'a,
     M: Metric<A>,
 {
     /// Builds a vantage point tree using the given distance metric.
