@@ -2,7 +2,7 @@ use crate::distance::{self, Euclidean, Metric};
 use crate::ArrayError;
 use ndarray::{Array1, ArrayBase, ArrayView1, CowArray, Data, Ix1, Ix2};
 use num_traits::{Float, FromPrimitive, Zero};
-use ordered_float::OrderedFloat;
+use ordered_float::{FloatCore, OrderedFloat};
 use std::cmp;
 use std::collections::BinaryHeap;
 use std::num::NonZeroUsize;
@@ -12,7 +12,7 @@ use std::ops::{AddAssign, DivAssign, Range};
 /// which is partitioned into a nested set of hyperspheres, or "balls".
 pub struct BallTree<'a, A, M>
 where
-    A: Float,
+    A: FloatCore,
     M: Metric<A>,
 {
     pub points: CowArray<'a, A, Ix2>,
@@ -23,7 +23,7 @@ where
 
 impl<'a, A, M> BallTree<'a, A, M>
 where
-    A: Float + Zero + AddAssign + DivAssign + FromPrimitive,
+    A: FloatCore + Zero + AddAssign + DivAssign + FromPrimitive,
     M: Metric<A>,
 {
     /// Builds a ball tree using the given distance metric.
@@ -74,6 +74,7 @@ where
     /// assert_eq!(index, 2);  // points[2] is the nearest.
     /// assert!((2_f64.sqrt() - distance).abs() < 1e-8);
     /// ```
+    #[allow(clippy::missing_panics_doc)] // never panics
     pub fn query_nearest<S>(&self, point: &ArrayBase<S, Ix1>) -> (usize, A)
     where
         S: Data<Elem = A>,
@@ -100,9 +101,7 @@ where
     where
         S: Data<Elem = A>,
     {
-        let k = if let Some(k) = NonZeroUsize::new(k) {
-            k
-        } else {
+        let Some(k) = NonZeroUsize::new(k) else {
             return (Vec::new(), Vec::new());
         };
         let mut neighbors = BinaryHeap::with_capacity(k.get());
@@ -355,7 +354,7 @@ where
 
 impl<'a, A> BallTree<'a, A, Euclidean>
 where
-    A: Float + Zero + AddAssign + DivAssign + FromPrimitive,
+    A: FloatCore + Float + Zero + AddAssign + DivAssign + FromPrimitive,
 {
     /// Builds a ball tree with a euclidean distance metric.
     ///
@@ -375,17 +374,14 @@ where
 
 /// An error returned when an array is not suitable to build a `BallTree`.
 #[derive(Clone, Debug)]
-struct Neighbor<A>
-where
-    A: Float,
-{
+struct Neighbor<A> {
     pub idx: usize,
     pub distance: OrderedFloat<A>,
 }
 
 impl<A> Neighbor<A>
 where
-    A: Float,
+    A: FloatCore,
 {
     #[must_use]
     pub fn new(idx: usize, distance: A) -> Self {
@@ -398,7 +394,7 @@ where
 
 impl<A> Ord for Neighbor<A>
 where
-    A: Float,
+    A: FloatCore,
 {
     #[must_use]
     fn cmp(&self, other: &Self) -> cmp::Ordering {
@@ -408,17 +404,17 @@ where
 
 impl<A> PartialOrd for Neighbor<A>
 where
-    A: Float,
+    A: FloatCore,
 {
     #[must_use]
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        self.distance.partial_cmp(&other.distance)
+        Some(self.cmp(other))
     }
 }
 
 impl<A> PartialEq for Neighbor<A>
 where
-    A: Float,
+    A: FloatCore,
 {
     #[must_use]
     fn eq(&self, other: &Self) -> bool {
@@ -426,7 +422,7 @@ where
     }
 }
 
-impl<A> Eq for Neighbor<A> where A: Float {}
+impl<A> Eq for Neighbor<A> where A: FloatCore {}
 
 /// A node containing a range of points in a ball tree.
 #[derive(Clone, Debug)]
@@ -439,7 +435,7 @@ pub struct Node<A> {
 
 impl<A> Node<A>
 where
-    A: Float + Zero + AddAssign + DivAssign + FromPrimitive,
+    A: FloatCore + Zero + AddAssign + DivAssign + FromPrimitive,
 {
     /// Computes the centroid of the node.
     ///
@@ -489,7 +485,7 @@ where
 
 impl<A> Default for Node<A>
 where
-    A: Float + Zero,
+    A: FloatCore + Zero,
 {
     #[allow(clippy::reversed_empty_ranges)] // An empty range is valid because `centroid` is empty.
     fn default() -> Self {
@@ -515,7 +511,7 @@ fn build_subtree<A, M>(
     range: Range<usize>,
     metric: &M,
 ) where
-    A: Float + AddAssign + DivAssign + FromPrimitive,
+    A: FloatCore + AddAssign + DivAssign + FromPrimitive,
     M: Metric<A>,
 {
     let n_nodes = nodes.len();
@@ -550,7 +546,7 @@ fn build_subtree<A, M>(
 /// Panics if `col` is empty.
 fn halve_node_indices<A>(idx: &mut [usize], col: &ArrayView1<A>)
 where
-    A: Float,
+    A: FloatCore,
 {
     let (mut first, mut last) = (0, idx.len() - 1);
     let mid = idx.len() / 2;
@@ -582,7 +578,7 @@ where
 /// greater than or equal to the number of rows in `matrix`.
 fn max_spread_column<A, S>(matrix: &ArrayBase<S, Ix2>, idx: &[usize]) -> usize
 where
-    A: Float,
+    A: FloatCore,
     S: Data<Elem = A>,
 {
     let mut spread_iter = matrix
@@ -623,6 +619,7 @@ mod test {
     use ndarray::{arr1, array, aview1, aview2, Array, Axis};
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
+    use ordered_float::FloatCore;
 
     #[test]
     #[should_panic]
@@ -875,7 +872,7 @@ mod test {
         metric: &M,
     ) -> Vec<Neighbor<A>>
     where
-        A: Float,
+        A: FloatCore,
         S: Data<Elem = A>,
         M: Metric<A>,
     {
