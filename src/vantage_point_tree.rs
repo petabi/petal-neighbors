@@ -202,7 +202,7 @@ struct Node<A> {
     radius: A,
 }
 
-const NULL: usize = usize::max_value();
+const NULL: usize = usize::MAX;
 
 struct DistanceIndex<A> {
     distance: OrderedFloat<A>,
