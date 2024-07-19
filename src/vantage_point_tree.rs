@@ -1,9 +1,11 @@
-use crate::distance::{self, Metric};
-use crate::ArrayError;
+use std::ops::AddAssign;
+
 use ndarray::{ArrayBase, ArrayView1, CowArray, Data, Ix1, Ix2};
 use num_traits::{Float, Zero};
 use ordered_float::{FloatCore, OrderedFloat};
-use std::ops::AddAssign;
+
+use crate::distance::{self, Metric};
+use crate::ArrayError;
 
 /// A data structure for nearest neighbor search in a multi-dimensional space,
 /// which is partitioned into two parts for each vantage point: those points
@@ -211,8 +213,9 @@ struct DistanceIndex<A> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use ndarray::{array, aview1};
+
+    use super::*;
 
     #[test]
     fn euclidian() {

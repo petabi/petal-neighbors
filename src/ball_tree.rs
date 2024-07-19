@@ -1,12 +1,14 @@
-use crate::distance::{self, Euclidean, Metric};
-use crate::ArrayError;
-use ndarray::{Array1, ArrayBase, ArrayView1, CowArray, Data, Ix1, Ix2};
-use num_traits::{Float, FromPrimitive, Zero};
-use ordered_float::{FloatCore, OrderedFloat};
 use std::cmp;
 use std::collections::BinaryHeap;
 use std::num::NonZeroUsize;
 use std::ops::{AddAssign, DivAssign, Range};
+
+use ndarray::{Array1, ArrayBase, ArrayView1, CowArray, Data, Ix1, Ix2};
+use num_traits::{Float, FromPrimitive, Zero};
+use ordered_float::{FloatCore, OrderedFloat};
+
+use crate::distance::{self, Euclidean, Metric};
+use crate::ArrayError;
 
 /// A data structure for nearest neighbor search in a multi-dimensional space,
 /// which is partitioned into a nested set of hyperspheres, or "balls".
@@ -613,13 +615,14 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::distance;
     use approx;
     use ndarray::{arr1, array, aview1, aview2, Array, Axis};
     use ndarray_rand::rand_distr::Uniform;
     use ndarray_rand::RandomExt;
     use ordered_float::FloatCore;
+
+    use super::*;
+    use crate::distance;
 
     #[test]
     #[should_panic]
