@@ -1,8 +1,9 @@
 //! Distance metrics.
 
+use std::ops::AddAssign;
+
 use ndarray::{Array2, ArrayView1, ArrayView2};
 use num_traits::{Float, Zero};
-use std::ops::AddAssign;
 
 /// The type of a distance metric function.
 pub trait Metric<A> {
