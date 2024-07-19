@@ -2,7 +2,7 @@
 name = "petal-neighbors"
 version = "0.10.0"
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.74"
 description = "Nearest neighbor search algorithms including a ball tree and a vantage point tree."
 readme = "README.md"
 documentation = "https://docs.rs/petal-neighbors"
