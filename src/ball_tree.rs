@@ -617,8 +617,6 @@ where
 mod test {
     use approx;
     use ndarray::{arr1, array, aview1, aview2, Array, Axis};
-    use ndarray_rand::rand_distr::Uniform;
-    use ndarray_rand::RandomExt;
     use ordered_float::FloatCore;
 
     use super::*;
@@ -745,6 +743,8 @@ mod test {
 
     #[test]
     fn ball_tree_query() {
+        use ndarray_rand::rand_distr::Uniform;
+        use ndarray_rand::RandomExt;
         const DIMENSION: usize = 3;
 
         let array = Array::random((40, DIMENSION), Uniform::new(0., 1.));
