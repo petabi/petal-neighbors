@@ -615,7 +615,6 @@ where
 
 #[cfg(test)]
 mod test {
-    use approx;
     use ndarray::{arr1, array, aview1, aview2, Array, Axis};
     use ordered_float::FloatCore;
 
