@@ -868,8 +868,8 @@ mod test {
     /// # Panics
     ///
     /// Panics if any row in `neighbors` is not contiguous in memory.
-    fn naive_k_nearest_neighbors<'a, A, S, M>(
-        neighbors: &'a ArrayBase<S, Ix2>,
+    fn naive_k_nearest_neighbors<A, S, M>(
+        neighbors: &ArrayBase<S, Ix2>,
         point: &ArrayView1<A>,
         k: usize,
         metric: &M,
