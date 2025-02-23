@@ -600,10 +600,7 @@ where
     let (max_spread_col, _) = spread_iter.fold(
         (0, max_spread),
         |(max_spread_col, max_spread), (i, spread)| {
-            if spread
-                .partial_cmp(&max_spread)
-                .map_or(false, |o| o == cmp::Ordering::Greater)
-            {
+            if spread.partial_cmp(&max_spread) == Some(cmp::Ordering::Greater) {
                 (i, spread)
             } else {
                 (max_spread_col, max_spread)
