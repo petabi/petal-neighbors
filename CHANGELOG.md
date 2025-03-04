@@ -5,6 +5,18 @@ file is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Added `Cosine` Distance Metric Implementation
+  - Implemented the **Cosine** distance metric by defining the `Cosine` struct
+    and implementing the `Metric` trait. **Cosine** distance is defined as `1 -
+    cosine similarity`, where \[ \text{cosine similarity} = \frac{\mathbf{A}
+    \cdot \mathbf{B}}{\|\mathbf{A}\| \|\mathbf{B}\|} \]
+  - Ensured thread safety and used generic floating-point types (`Float`) for
+    flexibility in numerical calculations.
+
 ## [0.11.0] - 2024-08-07
 
 ### Changed
@@ -126,6 +138,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - A ball tree data structure to find nearest neighbors.
 
+[Unreleased]: https://github.com/petabi/petal-neighbors/compare/0.11.0...main
 [0.11.0]: https://github.com/petabi/petal-neighbors/compare/0.10.0...0.11.0
 [0.10.0]: https://github.com/petabi/petal-neighbors/compare/0.9.0...0.10.0
 [0.9.0]: https://github.com/petabi/petal-neighbors/compare/0.8.0...0.9.0
