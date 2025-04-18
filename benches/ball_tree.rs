@@ -4,7 +4,7 @@ use ndarray_rand::rand::{rngs::StdRng, Rng, SeedableRng};
 use petal_neighbors::BallTree;
 
 fn build(c: &mut Criterion) {
-    let n = black_box(64);
+    let n = black_box(128);
     let dim = black_box(10);
 
     let mut rng = StdRng::from_seed(*b"ball tree build bench test seed ");
