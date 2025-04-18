@@ -4,7 +4,7 @@ use ndarray_rand::rand::{rngs::StdRng, Rng, SeedableRng};
 use petal_neighbors::BallTree;
 
 fn build(c: &mut Criterion) {
-    let n = black_box(128);
+    let n = black_box(64);
     let dim = black_box(10);
 
     let mut rng = StdRng::from_seed(*b"ball tree build bench test seed ");
@@ -38,5 +38,26 @@ fn query_radius(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, build, query_radius);
+fn query(c: &mut Criterion) {
+    let n = black_box(64);
+    let dim = black_box(10);
+
+    let mut rng = StdRng::from_seed(*b"ball tree query_radius test seed");
+    let data: Vec<f64> = (0..n * dim).map(|_| rng.gen()).collect();
+    let array = ArrayView::from_shape((n, dim), &data).unwrap();
+    let tree = BallTree::euclidean(array).expect("`array` is not empty");
+    c.bench_function("query", |b| {
+        b.iter(|| {
+            for i in 0..n {
+                let query = &data[i * dim..i * dim + dim];
+                tree.query(
+                    &<ArrayBase<CowRepr<f64>, _> as From<&[f64]>>::from(query),
+                    5,
+                );
+            }
+        })
+    });
+}
+
+criterion_group!(benches, build, query_radius, query);
 criterion_main!(benches);
