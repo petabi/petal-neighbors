@@ -214,24 +214,16 @@ where
         }
 
         if root_node.is_leaf {
-            self.idx[root_node.range.clone()]
-                .iter()
-                .filter_map(|&i| {
-                    let dist = self.metric.distance(point, &self.points.row(i));
-                    if dist < *radius {
-                        Some(Neighbor::new(i, dist))
-                    } else {
-                        None
-                    }
-                })
-                .for_each(|n| {
-                    if neighbors.len() < k.get() {
-                        neighbors.push(n);
-                    } else if n < *neighbors.peek().expect("not empty") {
-                        neighbors.pop();
-                        neighbors.push(n);
-                    }
-                });
+            self.idx[root_node.range.clone()].iter().for_each(|&i| {
+                let dist = self.metric.distance(point, &self.points.row(i));
+                let n = Neighbor::new(i, dist);
+                if neighbors.len() < k.get() {
+                    neighbors.push(n);
+                } else if n < *neighbors.peek().expect("not empty") {
+                    neighbors.pop();
+                    neighbors.push(n);
+                }
+            });
         } else {
             let child1 = root * 2 + 1;
             let child2 = child1 + 1;
