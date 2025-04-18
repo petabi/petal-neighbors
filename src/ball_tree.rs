@@ -107,7 +107,13 @@ where
             return (Vec::new(), Vec::new());
         };
         let mut neighbors = BinaryHeap::with_capacity(k.get());
-        self.nearest_k_neighbors_in_subtree(&point.view(), 0, A::infinity(), k, &mut neighbors);
+        self.nearest_k_neighbors_in_subtree(
+            &point.view(),
+            0,
+            &mut A::infinity(),
+            k,
+            &mut neighbors,
+        );
         let sorted = neighbors.into_sorted_vec();
         let indices = sorted.iter().map(|v| v.idx).collect();
         let distances = sorted.iter().map(|v| v.distance.into_inner()).collect();
@@ -198,12 +204,12 @@ where
         &self,
         point: &ArrayView1<A>,
         root: usize,
-        radius: A,
+        radius: &mut A,
         k: NonZeroUsize,
         neighbors: &mut BinaryHeap<Neighbor<A>>,
     ) {
         let root_node = &self.nodes[root];
-        if root_node.distance_lower_bound(point, &self.metric) > radius {
+        if root_node.distance_lower_bound(point, &self.metric) > *radius {
             return;
         }
 
@@ -212,21 +218,19 @@ where
                 .iter()
                 .filter_map(|&i| {
                     let dist = self.metric.distance(point, &self.points.row(i));
-
-                    if dist < radius {
+                    if dist < *radius {
                         Some(Neighbor::new(i, dist))
                     } else {
                         None
                     }
                 })
-                .fold(neighbors, |neighbors, n| {
+                .for_each(|n| {
                     if neighbors.len() < k.get() {
                         neighbors.push(n);
                     } else if n < *neighbors.peek().expect("not empty") {
                         neighbors.pop();
                         neighbors.push(n);
                     }
-                    neighbors
                 });
         } else {
             let child1 = root * 2 + 1;
@@ -240,6 +244,9 @@ where
             };
             self.nearest_k_neighbors_in_subtree(point, child1, radius, k, neighbors);
             self.nearest_k_neighbors_in_subtree(point, child2, radius, k, neighbors);
+        }
+        if neighbors.len() == k.get() {
+            *radius = neighbors.peek().expect("not empty").distance.into_inner();
         }
     }
 
