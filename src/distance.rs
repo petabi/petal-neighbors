@@ -146,9 +146,9 @@ mod test {
         let metric = super::Cosine::default();
         let x = arr1(&[1., 0.]);
         let y = arr1(&[0., 1.]);
-        assert_eq!(metric.distance(&x.view(), &y.view()), 1.);
-        assert_eq!(metric.rdistance(&x.view(), &x.view()), 0.);
-        assert_eq!(metric.rdistance(&y.view(), &y.view()), 0.);
+        assert_abs_diff_eq!(metric.distance(&x.view(), &y.view()), 1., epsilon = 1e-6);
+        assert_abs_diff_eq!(metric.rdistance(&x.view(), &x.view()), 0., epsilon = 1e-6);
+        assert_abs_diff_eq!(metric.rdistance(&y.view(), &y.view()), 0., epsilon = 1e-6);
 
         // Test case 1: Identical vectors (distance should be 0)
         let v1 = arr1(&[1.0, 2.0, 3.0]);

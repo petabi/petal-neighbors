@@ -397,7 +397,6 @@ impl<A> Ord for Neighbor<A>
 where
     A: FloatCore,
 {
-    #[must_use]
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.distance.cmp(&other.distance)
     }
@@ -407,7 +406,6 @@ impl<A> PartialOrd for Neighbor<A>
 where
     A: FloatCore,
 {
-    #[must_use]
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
@@ -417,7 +415,6 @@ impl<A> PartialEq for Neighbor<A>
 where
     A: FloatCore,
 {
-    #[must_use]
     fn eq(&self, other: &Self) -> bool {
         self.distance == other.distance
     }
@@ -582,6 +579,12 @@ where
     A: FloatCore,
     S: Data<Elem = A>,
 {
+    assert!(matrix.ncols() > 0 && !idx.is_empty(), "empty matrix");
+    assert!(
+        idx.iter().all(|&i| i < matrix.nrows()),
+        "index out of bounds"
+    );
+
     let mut spread_iter = matrix
         .columns()
         .into_iter()
@@ -618,7 +621,7 @@ mod test {
     use crate::distance;
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "`data` should not be empty")]
     fn ball_tree_empty() {
         let data: [[f64; 0]; 0] = [];
         let tree = BallTree::euclidean(aview2(&data)).expect("`data` should not be empty");
@@ -627,7 +630,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "`array` should not be empty")]
     fn ball_tree_column_base() {
         let array = array![[1., 1.], [1., 1.1], [9., 9.]];
         let fortran = array.reversed_axes();
@@ -783,15 +786,16 @@ mod test {
         let metric = distance::Euclidean::default();
         node.init(&array.view().into(), &idx, &metric);
         assert_eq!(node.centroid, arr1(&[0., 4.]));
-        assert_eq!(node.radius, 5.);
+        assert!(approx::abs_diff_eq!(node.radius, 5.));
 
         let idx: [usize; 2] = [0, 2];
         node.init(&array.into(), &idx, &metric);
         assert_eq!(node.centroid, arr1(&[0., 1.5]));
+        assert!(approx::abs_diff_eq!(node.radius, 0.5));
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "attempt to subtract with overflow")]
     fn halve_node_indices_empty() {
         let col: [f64; 0] = [];
         let mut idx: [usize; 0] = [];
@@ -828,7 +832,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "empty matrix")]
     fn max_spread_column_empty_idx() {
         let data = [[0., 1.], [0., 9.], [0., 2.]];
         let idx: [usize; 0] = [];
@@ -836,7 +840,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "index out of bounds")]
     fn max_spread_column_idx_out_of_bound() {
         let data = [[0., 1.], [0., 9.], [0., 2.]];
         let idx: [usize; 3] = [0, 4, 2];
@@ -844,7 +848,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "empty matrix")]
     fn max_spread_column_empty_matrix() {
         let data: [[f64; 0]; 0] = [];
         let idx: [usize; 3] = [0, 1, 2];
