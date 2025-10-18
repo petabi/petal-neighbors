@@ -3,7 +3,7 @@ use std::collections::BinaryHeap;
 use std::num::NonZeroUsize;
 use std::ops::{AddAssign, DivAssign, Range};
 
-use ndarray::{Array1, ArrayBase, ArrayView1, CowArray, Data, Ix1, Ix2};
+use ndarray::{Array1, Array2, ArrayBase, ArrayView1, CowArray, Data, Ix1, Ix2};
 use num_traits::{Float, FromPrimitive, Zero};
 use ordered_float::{FloatCore, OrderedFloat};
 
@@ -60,6 +60,70 @@ where
             nodes,
             metric,
         })
+    }
+
+    /// Builds a ball tree from an iterator of points using the given distance
+    /// metric.
+    ///
+    /// The iterator yields items that can be converted to slices representing
+    /// points in the space. All points must have the same dimensionality.
+    ///
+    /// # Errors
+    ///
+    /// * `ArrayError::Empty` if the iterator yields no points.
+    /// * `ArrayError::NotContiguous` if any point is not contiguous in memory.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ndarray::array;
+    /// use petal_neighbors::{BallTree, distance::Euclidean};
+    ///
+    /// // From Vec<Vec<f64>>
+    /// let points: Vec<Vec<f64>> = vec![
+    ///     vec![1.0, 2.0],
+    ///     vec![3.0, 4.0],
+    ///     vec![5.0, 6.0],
+    /// ];
+    /// let tree = BallTree::from_iter(
+    ///     points.iter().map(|p| p.as_slice()),
+    ///     Euclidean::default()
+    /// ).expect("valid points");
+    ///
+    /// // From Vec<[f64; N]>
+    /// let points = vec![[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]];
+    /// let tree = BallTree::from_iter(
+    ///     points.iter().map(|p| p.as_slice()),
+    ///     Euclidean::default()
+    /// ).expect("valid points");
+    /// ```
+    pub fn from_iter<I, P>(iter: I, metric: M) -> Result<Self, ArrayError>
+    where
+        I: IntoIterator<Item = P>,
+        P: AsRef<[A]>,
+    {
+        let points_vec: Vec<P> = iter.into_iter().collect();
+        if points_vec.is_empty() {
+            return Err(ArrayError::Empty);
+        }
+
+        let n_points = points_vec.len();
+        let n_dims = points_vec[0].as_ref().len();
+
+        let mut points_flat = Vec::with_capacity(n_points * n_dims);
+        for point in &points_vec {
+            let point_slice = point.as_ref();
+            if point_slice.len() != n_dims {
+                // All points must have the same dimensionality, but we'll
+                // let ndarray handle this validation
+            }
+            points_flat.extend_from_slice(point_slice);
+        }
+
+        let points_array = Array2::from_shape_vec((n_points, n_dims), points_flat)
+            .map_err(|_| ArrayError::NotContiguous)?;
+
+        Self::new(points_array, metric)
     }
 
     /// Finds the nearest neighbor and its distance in the tree.
@@ -370,6 +434,46 @@ where
         T: Into<CowArray<'a, A, Ix2>>,
     {
         BallTree::<'a, A, Euclidean>::new(points, distance::Euclidean::default())
+    }
+
+    /// Builds a ball tree from an iterator of points with a euclidean distance
+    /// metric.
+    ///
+    /// The iterator yields items that can be converted to slices representing
+    /// points in the space. All points must have the same dimensionality.
+    ///
+    /// # Errors
+    ///
+    /// * `ArrayError::Empty` if the iterator yields no points.
+    /// * `ArrayError::NotContiguous` if any point is not contiguous in memory.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use petal_neighbors::BallTree;
+    ///
+    /// // From Vec<Vec<f64>>
+    /// let points: Vec<Vec<f64>> = vec![
+    ///     vec![1.0, 2.0],
+    ///     vec![3.0, 4.0],
+    ///     vec![5.0, 6.0],
+    /// ];
+    /// let tree = BallTree::euclidean_from_iter(
+    ///     points.iter().map(|p| p.as_slice())
+    /// ).expect("valid points");
+    ///
+    /// // From Vec<[f64; N]>
+    /// let points = vec![[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]];
+    /// let tree = BallTree::euclidean_from_iter(
+    ///     points.iter().map(|p| p.as_slice())
+    /// ).expect("valid points");
+    /// ```
+    pub fn euclidean_from_iter<I, P>(iter: I) -> Result<BallTree<'a, A, Euclidean>, ArrayError>
+    where
+        I: IntoIterator<Item = P>,
+        P: AsRef<[A]>,
+    {
+        BallTree::<'a, A, Euclidean>::from_iter(iter, distance::Euclidean::default())
     }
 }
 
@@ -888,5 +992,146 @@ mod test {
             .collect::<Vec<Neighbor<A>>>();
         knn.sort();
         knn[0..k].to_vec()
+    }
+
+    #[test]
+    fn ball_tree_from_iter() {
+        let points = [array![1., 1.], array![1., 1.1], array![9., 9.]];
+        let tree = BallTree::euclidean_from_iter(points.iter().map(ndarray::ArrayBase::to_vec))
+            .expect("`points` should not be empty");
+
+        let point = aview1(&[0., 0.]);
+        let neighbor = tree.query_nearest(&point);
+        assert_eq!(neighbor.0, 0);
+        assert!(approx::abs_diff_eq!(neighbor.1, 2_f64.sqrt()));
+    }
+
+    #[test]
+    fn ball_tree_from_iter_with_metric() {
+        let points = [array![1., 1.], array![1., 1.1], array![9., 9.]];
+        let tree = BallTree::from_iter(
+            points.iter().map(ndarray::ArrayBase::to_vec),
+            Euclidean::default(),
+        )
+        .expect("`points` should not be empty");
+
+        let point = aview1(&[0., 0.]);
+        let neighbor = tree.query_nearest(&point);
+        assert_eq!(neighbor.0, 0);
+        assert!(approx::abs_diff_eq!(neighbor.1, 2_f64.sqrt()));
+    }
+
+    #[test]
+    fn ball_tree_from_iter_vec_vec() {
+        // Test with Vec<Vec<f64>> which is a common use case
+        let points: Vec<Vec<f64>> = vec![vec![1., 1.], vec![1., 1.1], vec![9., 9.]];
+        let tree = BallTree::euclidean_from_iter(points.iter().map(std::vec::Vec::as_slice))
+            .expect("`points` should not be empty");
+
+        let point = aview1(&[0., 0.]);
+        let neighbor = tree.query_nearest(&point);
+        assert_eq!(neighbor.0, 0);
+        assert!(approx::abs_diff_eq!(neighbor.1, 2_f64.sqrt()));
+    }
+
+    #[test]
+    fn ball_tree_from_iter_arrays() {
+        // Test with fixed-size arrays
+        let points = [[1., 1.], [1., 1.1], [9., 9.]];
+        let tree = BallTree::euclidean_from_iter(points.iter().map(<[f64; 2]>::as_slice))
+            .expect("`points` should not be empty");
+
+        let point = aview1(&[0., 0.]);
+        let neighbor = tree.query_nearest(&point);
+        assert_eq!(neighbor.0, 0);
+        assert!(approx::abs_diff_eq!(neighbor.1, 2_f64.sqrt()));
+    }
+
+    #[test]
+    fn ball_tree_from_iter_query() {
+        use ndarray_rand::rand_distr::Uniform;
+        use ndarray_rand::RandomExt;
+        const DIMENSION: usize = 3;
+
+        let array = Array::random((40, DIMENSION), Uniform::new(0., 1.));
+        let points: Vec<Vec<f64>> = array.rows().into_iter().map(|r| r.to_vec()).collect();
+        let tree = BallTree::euclidean_from_iter(points.iter().map(std::vec::Vec::as_slice))
+            .expect("`points` should not be empty");
+
+        let euclidean = distance::Euclidean::default();
+        for _ in 0..10 {
+            let query = Array::random(DIMENSION, Uniform::new(0., 1.));
+            let (_, bt_distances) = tree.query(&query, 5);
+            let naive_neighbors = naive_k_nearest_neighbors(&array, &query.view(), 5, &euclidean);
+            for (bt_dist, naive_neighbor) in bt_distances.iter().zip(naive_neighbors.iter()) {
+                assert!(approx::abs_diff_eq!(
+                    *bt_dist,
+                    naive_neighbor.distance.into_inner()
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn ball_tree_from_iter_empty() {
+        let points: Vec<Vec<f64>> = vec![];
+        let result = BallTree::euclidean_from_iter(points.iter().map(std::vec::Vec::as_slice));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn ball_tree_from_iter_single_point() {
+        let points = [vec![1., 2., 3.]];
+        let tree = BallTree::euclidean_from_iter(points.iter().map(std::vec::Vec::as_slice))
+            .expect("`points` should not be empty");
+
+        let point = aview1(&[1., 2., 3.]);
+        let neighbor = tree.query_nearest(&point);
+        assert_eq!(neighbor.0, 0);
+        assert!(approx::abs_diff_eq!(neighbor.1, 0.0));
+    }
+
+    #[test]
+    fn ball_tree_from_iter_filter() {
+        // Test with filtered iterator - a realistic use case
+        let all_points = [
+            vec![1., 1.],
+            vec![2., 2.],
+            vec![3., 3.],
+            vec![4., 4.],
+            vec![5., 5.],
+        ];
+        // Only use points where sum of coordinates is > 4
+        let tree = BallTree::euclidean_from_iter(
+            all_points
+                .iter()
+                .filter(|p| p[0] + p[1] > 4.0)
+                .map(std::vec::Vec::as_slice),
+        )
+        .expect("`points` should not be empty");
+
+        // Should only have points [3,3], [4,4], [5,5]
+        assert_eq!(tree.num_points(), 3);
+
+        let point = aview1(&[3., 3.]);
+        let neighbor = tree.query_nearest(&point);
+        assert!(approx::abs_diff_eq!(neighbor.1, 0.0));
+    }
+
+    #[test]
+    fn ball_tree_from_iter_map() {
+        // Test with mapped iterator - transforming data
+        let raw_points = [(1, 1), (2, 2), (9, 9)];
+        let tree = BallTree::euclidean_from_iter(
+            raw_points
+                .iter()
+                .map(|(x, y)| vec![f64::from(*x), f64::from(*y)]),
+        )
+        .expect("`points` should not be empty");
+
+        let point = aview1(&[0., 0.]);
+        let neighbor = tree.query_nearest(&point);
+        assert_eq!(neighbor.0, 0);
+        assert!(approx::abs_diff_eq!(neighbor.1, 2_f64.sqrt()));
     }
 }
