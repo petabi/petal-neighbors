@@ -1,4 +1,6 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
+
+use criterion::{criterion_group, criterion_main, Criterion};
 use ndarray::{ArrayBase, ArrayView, CowRepr};
 use ndarray_rand::rand::{rngs::StdRng, Rng, SeedableRng};
 use petal_neighbors::BallTree;
@@ -8,7 +10,7 @@ fn build(c: &mut Criterion) {
     let dim = black_box(10);
 
     let mut rng = StdRng::from_seed(*b"ball tree build bench test seed ");
-    let data: Vec<f64> = (0..n * dim).map(|_| rng.gen()).collect();
+    let data: Vec<f64> = (0..n * dim).map(|_| rng.random()).collect();
     let array = ArrayView::from_shape((n, dim), &data).unwrap();
     c.bench_function("build", |b| {
         b.iter(|| {
@@ -22,7 +24,7 @@ fn query_radius(c: &mut Criterion) {
     let dim = black_box(10);
 
     let mut rng = StdRng::from_seed(*b"ball tree query_radius test seed");
-    let data: Vec<f64> = (0..n * dim).map(|_| rng.gen()).collect();
+    let data: Vec<f64> = (0..n * dim).map(|_| rng.random()).collect();
     let array = ArrayView::from_shape((n, dim), &data).unwrap();
     let tree = BallTree::euclidean(array).expect("`array` is not empty");
     c.bench_function("query_radius", |b| {
@@ -43,7 +45,7 @@ fn query(c: &mut Criterion) {
     let dim = black_box(10);
 
     let mut rng = StdRng::from_seed(*b"ball tree query_radius test seed");
-    let data: Vec<f64> = (0..n * dim).map(|_| rng.gen()).collect();
+    let data: Vec<f64> = (0..n * dim).map(|_| rng.random()).collect();
     let array = ArrayView::from_shape((n, dim), &data).unwrap();
     let tree = BallTree::euclidean(array).expect("`array` is not empty");
     c.bench_function("query", |b| {

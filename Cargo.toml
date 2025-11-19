@@ -18,7 +18,7 @@ exclude = ["./github"]
 codecov = { repository = "petabi/petal-neighbors", service = "github" }
 
 [dependencies]
-ndarray = "0.16"
+ndarray = "0.17"
 num-traits = "0.2"
 ordered-float = "5"
 thiserror = "2"
@@ -26,7 +26,7 @@ thiserror = "2"
 [dev-dependencies]
 approx = "0.5"
 criterion = "0.7"
-ndarray-rand = "0.15.0"
+ndarray-rand = "0.16"
 
 [[bench]]
 name = "ball_tree"

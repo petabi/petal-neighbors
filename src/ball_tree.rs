@@ -745,11 +745,14 @@ mod test {
         use ndarray_rand::RandomExt;
         const DIMENSION: usize = 3;
 
-        let array = Array::random((40, DIMENSION), Uniform::new(0., 1.));
+        let array = Array::random(
+            (40, DIMENSION),
+            Uniform::new(0., 1.).expect("valid low and high"),
+        );
         let bt = BallTree::euclidean(array.view()).expect("`array` should not be empty");
         let euclidean = distance::Euclidean::default();
         for _ in 0..10 {
-            let query = Array::random(DIMENSION, Uniform::new(0., 1.));
+            let query = Array::random(DIMENSION, Uniform::new(0., 1.).expect("valid low and high"));
             let (_, bt_distances) = bt.query(&query, 5);
             let naive_neighbors = naive_k_nearest_neighbors(&array, &query.view(), 5, &euclidean);
             for (bt_dist, naive_neighbor) in bt_distances.iter().zip(naive_neighbors.iter()) {

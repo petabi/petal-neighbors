@@ -54,6 +54,7 @@ where
     }
 }
 
+#[allow(clippy::needless_pass_by_value)] // Silences clippy warning. TODO: Update the parameter type to [`ArrayRef`](https://docs.rs/ndarray/latest/ndarray/struct.ArrayRef.html).
 pub fn pairwise<A: Float + Zero + AddAssign>(
     x: ArrayView2<A>,
     metric: &dyn Metric<A>,
