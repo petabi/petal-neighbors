@@ -175,7 +175,7 @@ where
                 .distance(&points.row(r.id), &points.row(vantage_point))
                 .into();
         }
-        rest.sort_unstable_by(|a, b| a.distance.cmp(&b.distance));
+        rest.sort_unstable_by_key(|a| a.distance);
 
         let half = rest.len() / 2;
         let (near, far) = rest.split_at_mut(half);
