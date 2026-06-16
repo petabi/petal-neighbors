@@ -11,7 +11,7 @@ jobs:
     steps:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -21,7 +21,7 @@ jobs:
     steps:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@1.81.0
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - name: Check compilation
       run: cargo build --verbose
 
@@ -30,7 +30,7 @@ jobs:
     steps:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - name: Install cargo-llvm-cov
       uses: taiki-e/install-action@v2
       with:
@@ -38,7 +38,7 @@ jobs:
     - name: Generate coverage report
       run: cargo llvm-cov --workspace --lcov --output-path lcov.info
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@v7
 
   check:
     runs-on: ubuntu-latest
@@ -47,7 +47,7 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         components: clippy, rustfmt
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - name: Check formatting
       run: cargo fmt -- --check --config group_imports=StdExternalCrate
     - name: Clippy
