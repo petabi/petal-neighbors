@@ -32,5 +32,9 @@ ndarray-rand = "0.16"
 name = "ball_tree"
 harness = false
 
+[[bench]]
+name = "neighbors"
+harness = false
+
 [lints.clippy]
 pedantic = "warn"
