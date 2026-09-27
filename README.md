@@ -20,6 +20,20 @@ let (indices, distances) = tree.query(&aview1(&[3., 3.]), 2);
 assert_eq!(indices, &[1, 0]);  // points[1] is the nearest, points[0] the next.
 ```
 
+## Performance benchmarks
+
+The `neighbors` benchmark measures distance calculations, pairwise distances,
+and ball tree and vantage point tree construction and queries for `f32` and
+`f64` at several dimensions.
+
+To compare algorithm changes on the same machine:
+
+```sh
+cargo bench --bench neighbors -- --save-baseline before
+# Make the change, then run:
+cargo bench --bench neighbors -- --baseline before
+```
+
 ## License
 
 Copyright 2019-2025 Petabi, Inc.

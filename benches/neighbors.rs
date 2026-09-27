@@ -67,7 +67,7 @@ macro_rules! benchmark_type {
                         }
                     });
                 });
-                let radius = (dim as $type / 6.0).sqrt();
+                let radius = (<$type>::from(u16::try_from(dim).unwrap()) / 6.0).sqrt();
                 group.bench_with_input(
                     BenchmarkId::new("query_radius_batch", dim),
                     &dim,

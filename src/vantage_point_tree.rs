@@ -1,5 +1,6 @@
 use std::ops::AddAssign;
 
+use fearless_simd::SimdFloatElement;
 use ndarray::{ArrayBase, ArrayView1, CowArray, Data, Ix1, Ix2};
 use num_traits::{Float, Zero};
 use ordered_float::{FloatCore, OrderedFloat};
@@ -19,7 +20,7 @@ pub struct VantagePointTree<'a, A, M> {
 
 impl<'a, A> VantagePointTree<'a, A, distance::Euclidean>
 where
-    A: Float + FloatCore + Zero + AddAssign + 'a,
+    A: Float + FloatCore + Zero + AddAssign + SimdFloatElement + 'a,
 {
     /// Builds a vantage point tree with a euclidean distance metric.
     ///

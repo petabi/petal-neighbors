@@ -3,6 +3,7 @@ use std::collections::BinaryHeap;
 use std::num::NonZeroUsize;
 use std::ops::{AddAssign, DivAssign, Range};
 
+use fearless_simd::SimdFloatElement;
 use ndarray::{Array1, ArrayBase, ArrayView1, CowArray, Data, Ix1, Ix2};
 use num_traits::{Float, FromPrimitive, Zero};
 use ordered_float::{FloatCore, OrderedFloat};
@@ -355,7 +356,7 @@ where
 
 impl<'a, A> BallTree<'a, A, Euclidean>
 where
-    A: FloatCore + Float + Zero + AddAssign + DivAssign + FromPrimitive,
+    A: FloatCore + Float + Zero + AddAssign + DivAssign + FromPrimitive + SimdFloatElement,
 {
     /// Builds a ball tree with a euclidean distance metric.
     ///
@@ -532,7 +533,7 @@ fn build_subtree<A, M>(
     let col = points.column(col_idx);
     halve_node_indices(&mut idx[range.clone()], &col);
 
-    let mid = (range.start + range.end) / 2;
+    let mid = range.start + (range.end - range.start) / 2;
     build_subtree(nodes, idx, points, left, range.start..mid, metric);
     build_subtree(nodes, idx, points, left + 1, mid..range.end, metric);
 }
@@ -798,7 +799,8 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "attempt to subtract with overflow")]
+    #[allow(clippy::should_panic_without_expect)] // Debug and release panic at different checks.
+    #[should_panic]
     fn halve_node_indices_empty() {
         let col: [f64; 0] = [];
         let mut idx: [usize; 0] = [];

@@ -5,6 +5,20 @@ file is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Requires Rust 1.90 or newer (previously 1.81).
+- Built-in Euclidean and cosine metrics now support `f32` and `f64`; users of
+  custom floating-point types can provide their own `Metric` implementation.
+
+### Performance
+
+- Accelerated Euclidean and cosine distance calculations for contiguous vectors
+  of at least 32 elements with runtime-dispatched SIMD, improving
+  high-dimensional ball tree and vantage point tree construction and queries.
+
 ## [0.18.0] - 2025-11-19
 
 ### Changed
@@ -154,6 +168,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - A ball tree data structure to find nearest neighbors.
 
+[Unreleased]: https://github.com/petabi/petal-neighbors/compare/0.18.0...main
 [0.18.0]: https://github.com/petabi/petal-neighbors/compare/0.13.0...0.18.0
 [0.13.0]: https://github.com/petabi/petal-neighbors/compare/0.12.0...0.13.0
 [0.12.0]: https://github.com/petabi/petal-neighbors/compare/0.11.0...0.12.0
