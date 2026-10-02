@@ -657,8 +657,8 @@ mod test {
         assert_eq!(neighbor.0, 0);
         assert!(approx::abs_diff_eq!(neighbor.1, 2_f64.sqrt()));
         let (indices, distances) = tree.query(&point, 0);
-        assert!(indices.is_empty());
-        assert!(distances.is_empty());
+        assert_eq!(indices, [] as [usize; 0]);
+        assert_eq!(distances, [] as [f64; 0]);
         let (indices, distances) = tree.query(&point, 1);
         assert_eq!(indices.len(), 1);
         assert_eq!(distances.len(), 1);
@@ -779,7 +779,7 @@ mod test {
         assert_eq!(neighbors, &[2, 3]);
 
         let neighbors = bt.query_radius(&aview1(&[9.]), 0.9);
-        assert!(neighbors.is_empty());
+        assert_eq!(neighbors, [] as [usize; 0]);
     }
 
     #[test]
